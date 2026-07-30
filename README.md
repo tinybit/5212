@@ -41,9 +41,12 @@ The Vite preview is configured for `0.0.0.0:8080`.
 Useful verification commands:
 
 ```bash
-npx tsc --noEmit
-npx eslint src/components/WeeklyCalendarWatch.tsx
+npm test
+npm run typecheck
+npm run lint
 ```
+
+The Vitest lighting suite guards aperture-shadow continuity at the zenith, zero-brightness behavior, hour-hand facet planarity, back-face specular masking, and light-aligned shadow direction.
 
 ## Controls
 
@@ -58,7 +61,7 @@ The dial controls are arranged in four rows:
 
 The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and interface controls hidden. The persistent `⚙️` button shows or hides all controls.
 
-The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle. In 3D marker mode, the movable light panel positions a point light on a hemisphere and controls its brightness; changes update diffuse and metallic specular shading independently on every marker facet.
+The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle. The marker mode also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. In 3D mode, the movable light panel positions a point light on a hemisphere and controls its brightness; changes update diffuse and metallic specular shading independently on every marker and hand facet.
 
 ## Key files
 

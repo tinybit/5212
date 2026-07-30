@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 
+import {
+  averagePoints,
+  dateWindowLightModel,
+  faceNormal,
+  lightShadowOffset,
+  normalize3,
+  planeHeightAt,
+  rotateVector,
+  shadeMetalFacet,
+  type DateWindowLightSettings,
+  type LightDiskPosition,
+  type Vec3,
+} from "./watchLighting";
+
 /**
  * Orthographic reference with track circles + sector lines + hour batons.
  *
@@ -83,6 +97,7 @@ const MINUTE_HAND_TIP_RADIUS = 786;
 const MINUTE_HAND_REAR_RADIUS = -105;
 const MINUTE_HAND_BASE_RADIUS = -25;
 const MINUTE_HAND_HALF_WIDTH = 60;
+const MINUTE_HAND_PRISM_HEIGHT = 26;
 
 /** Hour-hand geometry measured from the reference and traced silhouette. */
 const HOUR_HAND_ANGLE_DEG = -55.2;
@@ -91,6 +106,7 @@ const HOUR_HAND_REAR_RADIUS = -125;
 const HOUR_HAND_BASE_RADIUS = -15;
 const HOUR_HAND_HALF_WIDTH = 72;
 const HOUR_HAND_TIP_HALF_WIDTH = 3;
+const HOUR_HAND_PRISM_HEIGHT = 30;
 
 /** Week/month hammer-hand geometry measured from the reference. */
 const WEEK_HAND_REFERENCE_WEEK = 33;
@@ -724,85 +740,14 @@ function isoWeekNumber(date: Date) {
   return Math.ceil(((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
-type Vec3 = { x: number; y: number; z: number };
-type LightDiskPosition = { u: number; v: number };
-type DateWindowLightSettings = {
-  softness: number;
-  castDistance: number;
-  castStrength: number;
-  wallStrength: number;
-  bevelStrength: number;
-};
 type MarkerMode = "flat" | "3d";
 
 const MARKER_PRISM_HEIGHT = 34;
 const LIGHT_HEMISPHERE_RADIUS = R_DIAL_EDGE * 6;
 
-function subtract3(a: Vec3, b: Vec3): Vec3 {
-  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-}
-
-function cross3(a: Vec3, b: Vec3): Vec3 {
-  return {
-    x: a.y * b.z - a.z * b.y,
-    y: a.z * b.x - a.x * b.z,
-    z: a.x * b.y - a.y * b.x,
-  };
-}
-
-function dot3(a: Vec3, b: Vec3) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-function normalize3(vector: Vec3): Vec3 {
-  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
-  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
-}
-
-function faceNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 {
-  const normal = normalize3(cross3(subtract3(b, a), subtract3(c, a)));
-  return normal.z < 0 ? { x: -normal.x, y: -normal.y, z: -normal.z } : normal;
-}
-
-function average3(vectors: Vec3[]): Vec3 {
-  return normalize3(
-    vectors.reduce(
-      (sum, vector) => ({
-        x: sum.x + vector.x,
-        y: sum.y + vector.y,
-        z: sum.z + vector.z,
-      }),
-      { x: 0, y: 0, z: 0 },
-    ),
-  );
-}
-
-function rotateMarkerVector(vector: Vec3, angle: number): Vec3 {
-  const radians = (angle * Math.PI) / 180;
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-  return {
-    x: vector.x * cos - vector.y * sin,
-    y: vector.x * sin + vector.y * cos,
-    z: vector.z,
-  };
-}
-
 function markerWorldPoint(point: Vec3, angle: number, lateralOffset: number): Vec3 {
-  const rotated = rotateMarkerVector({ ...point, x: point.x + lateralOffset }, angle);
+  const rotated = rotateVector({ ...point, x: point.x + lateralOffset }, angle);
   return { x: CX + rotated.x, y: CY + rotated.y, z: rotated.z };
-}
-
-function averagePoints(points: Vec3[]): Vec3 {
-  const count = points.length;
-  return points.reduce(
-    (sum, point) => ({
-      x: sum.x + point.x / count,
-      y: sum.y + point.y / count,
-      z: sum.z + point.z / count,
-    }),
-    { x: 0, y: 0, z: 0 },
-  );
 }
 
 function markerFacetColor(
@@ -813,26 +758,81 @@ function markerFacetColor(
   lightPosition: Vec3,
   lightBrightness: number,
 ) {
-  const normal = normalize3(rotateMarkerVector(localNormal, markerAngle));
+  const normal = normalize3(rotateVector(localNormal, markerAngle));
   const center = markerWorldPoint(localCenter, markerAngle, lateralOffset);
-  const toLightVector = subtract3(lightPosition, center);
-  const distance = Math.hypot(toLightVector.x, toLightVector.y, toLightVector.z);
-  const toLight = normalize3(toLightVector);
-  const diffuse = Math.max(0, dot3(normal, toLight));
-  const attenuation = Math.min(1.6, Math.max(0.35, (LIGHT_HEMISPHERE_RADIUS / distance) ** 2));
-  const halfVector = normalize3({ x: toLight.x, y: toLight.y, z: toLight.z + 1 });
-  const specular =
-    Math.pow(Math.max(0, dot3(normal, halfVector)), 38) *
-    125 *
-    attenuation *
-    lightBrightness;
-  const level = 0.3 + diffuse * 0.95 * attenuation * lightBrightness;
-  const base = [72, 74, 71];
-  const channels = base.map((channel) => Math.round(Math.min(235, channel * level + specular)));
-  return {
-    fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
-    stroke: `rgb(${Math.round(channels[0] * 0.55)} ${Math.round(channels[1] * 0.55)} ${Math.round(channels[2] * 0.55)})`,
-  };
+  return shadeMetalFacet(
+    normal,
+    center,
+    lightPosition,
+    lightBrightness,
+    LIGHT_HEMISPHERE_RADIUS,
+  );
+}
+
+type LitHandFace = {
+  key: string;
+  points: Vec3[];
+  normal: Vec3;
+};
+
+function handPrismPoint(along: number, lateral: number, height: number): Vec3 {
+  return { x: lateral, y: -along, z: height };
+}
+
+function LitHandPrism({
+  angle,
+  faces,
+  lightBrightness,
+  lightPosition,
+  prismHeight,
+  shadowId,
+}: {
+  angle: number;
+  faces: LitHandFace[];
+  lightBrightness: number;
+  lightPosition: Vec3;
+  prismHeight: number;
+  shadowId: string;
+}) {
+  const shadowOffset = lightShadowOffset(lightPosition, prismHeight, { x: CX, y: CY });
+  return (
+    <>
+      <defs>
+        <filter id={shadowId} x="-30%" y="-30%" width="170%" height="170%">
+          <feDropShadow
+            dx={shadowOffset.dx}
+            dy={shadowOffset.dy}
+            stdDeviation="4"
+            floodColor="#000000"
+            floodOpacity={0.08 * Math.min(2, lightBrightness)}
+          />
+        </filter>
+      </defs>
+      <g filter={`url(#${shadowId})`}>
+        {faces.map((face) => {
+          const color = markerFacetColor(
+            face.normal,
+            averagePoints(face.points),
+            angle,
+            0,
+            lightPosition,
+            lightBrightness,
+          );
+          const projected = face.points.map((point) => markerWorldPoint(point, angle, 0));
+          return (
+            <path
+              key={face.key}
+              d={ptsToPath(projected)}
+              fill={color.fill}
+              stroke={color.stroke}
+              strokeWidth={2}
+              strokeLinejoin="round"
+            />
+          );
+        })}
+      </g>
+    </>
+  );
 }
 
 function FlatHourBaton({
@@ -915,6 +915,13 @@ function LitHourBaton({
   const innerRight = { x: hw, y: -R_BATON_IN, z: 0 };
   const innerRidge = { x: 0, y: -R_BATON_IN_APEX, z: MARKER_PRISM_HEIGHT };
   const innerTip = { x: 0, y: -R_BATON_IN_APEX_MIRROR, z: 0 };
+  const innerLeftNormal = faceNormal(innerTip, innerLeft, innerRidge);
+  const innerRightNormal = faceNormal(innerTip, innerRidge, innerRight);
+  const innerNormal = normalize3({
+    x: innerLeftNormal.x + innerRightNormal.x,
+    y: innerLeftNormal.y + innerRightNormal.y,
+    z: innerLeftNormal.z + innerRightNormal.z,
+  });
 
   const faces = [
     {
@@ -935,18 +942,12 @@ function LitHourBaton({
     {
       key: "inner",
       points: [innerTip, innerLeft, innerRidge, innerRight],
-      normal: average3([
-        faceNormal(innerTip, innerLeft, innerRidge),
-        faceNormal(innerTip, innerRidge, innerRight),
-      ]),
+      normal: innerNormal,
     },
   ];
 
   return (
-    <g
-      data-lit-hour-marker
-      transform={`rotate(${degFrom12} ${CX} ${CY}) translate(${lateralOffset} 0)`}
-    >
+    <g data-lit-hour-marker>
       {faces.map((face) => {
         const color = markerFacetColor(
           face.normal,
@@ -956,7 +957,9 @@ function LitHourBaton({
           lightPosition,
           lightBrightness,
         );
-        const projected = face.points.map((point) => ({ x: CX + point.x, y: CY + point.y }));
+        const projected = face.points.map((point) =>
+          markerWorldPoint(point, degFrom12, lateralOffset),
+        );
         return (
           <path
             key={face.key}
@@ -981,24 +984,18 @@ function DateWindowLighting({
   position: LightDiskPosition;
   settings: DateWindowLightSettings;
 }) {
-  const horizontalLength = Math.hypot(position.u, position.v) || 1;
-  const lightX = position.u / horizontalLength;
-  const lightY = position.v / horizontalLength;
-  const horizontalStrength = Math.min(1, horizontalLength);
-  const lightStrength = Math.min(1.1, 0.35 + brightness * 0.25);
+  const { castDistance, castOpacity, lightX, lightY, pointLightStrength } =
+    dateWindowLightModel(position, brightness, settings);
+  const wallDiffuse = (normalX: number, normalY: number) =>
+    Math.max(0, normalX * position.u + normalY * position.v);
   const wallOpacity = (normalX: number, normalY: number) =>
     settings.wallStrength *
-    (0.04 + Math.max(0, -(normalX * lightX + normalY * lightY)) * 0.32 * lightStrength);
+    (0.025 + (1 - wallDiffuse(normalX, normalY)) * 0.3 * pointLightStrength);
   const highlightOpacity = (normalX: number, normalY: number) =>
     settings.wallStrength *
-    Math.max(0, normalX * lightX + normalY * lightY) *
-    0.13 *
-    lightStrength;
-  const castDistance = settings.castDistance * horizontalStrength;
-  const castOpacity = Math.min(
-    0.8,
-    0.32 * settings.castStrength * lightStrength * (0.4 + horizontalStrength * 0.6),
-  );
+    wallDiffuse(normalX, normalY) *
+    0.16 *
+    pointLightStrength;
   const shadowFramePath = [
     `M ${DATE_WINDOW_CLIP_LEFT - 100} ${DATE_WINDOW_CLIP_TOP - 100}`,
     `H ${DATE_WINDOW_CLIP_RIGHT + 100}`,
@@ -1423,7 +1420,7 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
           <stop offset="100%" stopColor="#8f1d28" />
         </linearGradient>
         <filter id="week-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
-          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
@@ -1490,7 +1487,7 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
           <stop offset="100%" stopColor="#8e2530" />
         </linearGradient>
         <filter id="day-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
-          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
@@ -1513,7 +1510,17 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
   );
 }
 
-function HourHand({ rotation }: { rotation: number }) {
+function HourHand({
+  lightBrightness,
+  lightPosition,
+  mode,
+  rotation,
+}: {
+  lightBrightness: number;
+  lightPosition: Vec3;
+  mode: MarkerMode;
+  rotation: number;
+}) {
   const rear = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_REAR_RADIUS, 0);
   const lightBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, HOUR_HAND_HALF_WIDTH);
   const tipCenter = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, 0);
@@ -1521,8 +1528,73 @@ function HourHand({ rotation }: { rotation: number }) {
   const darkTip = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, -HOUR_HAND_TIP_HALF_WIDTH);
   const darkBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH);
 
+  if (mode === "3d") {
+    const ridgeRear = handPrismPoint(
+      HOUR_HAND_REAR_RADIUS,
+      0,
+      HOUR_HAND_PRISM_HEIGHT,
+    );
+    const positiveBase = handPrismPoint(
+      HOUR_HAND_BASE_RADIUS,
+      HOUR_HAND_HALF_WIDTH,
+      0,
+    );
+    const positiveTip = handPrismPoint(
+      HOUR_HAND_TIP_RADIUS,
+      HOUR_HAND_TIP_HALF_WIDTH,
+      0,
+    );
+    const negativeTip = handPrismPoint(
+      HOUR_HAND_TIP_RADIUS,
+      -HOUR_HAND_TIP_HALF_WIDTH,
+      0,
+    );
+    const negativeBase = handPrismPoint(
+      HOUR_HAND_BASE_RADIUS,
+      -HOUR_HAND_HALF_WIDTH,
+      0,
+    );
+    const ridgeTipHeight = planeHeightAt(
+      ridgeRear,
+      positiveTip,
+      positiveBase,
+      0,
+      -HOUR_HAND_TIP_RADIUS,
+    );
+    const ridgeTip = handPrismPoint(HOUR_HAND_TIP_RADIUS, 0, ridgeTipHeight);
+    const faces: LitHandFace[] = [
+      {
+        key: "positive",
+        points: [ridgeRear, positiveBase, positiveTip, ridgeTip],
+        normal: faceNormal(ridgeRear, positiveTip, positiveBase),
+      },
+      {
+        key: "negative",
+        points: [ridgeRear, ridgeTip, negativeTip, negativeBase],
+        normal: faceNormal(ridgeRear, negativeBase, negativeTip),
+      },
+    ];
+
+    return (
+      <g data-hour-hand data-hand-rendering="3d">
+        <LitHandPrism
+          angle={HOUR_HAND_ANGLE_DEG + rotation}
+          faces={faces}
+          lightBrightness={lightBrightness}
+          lightPosition={lightPosition}
+          prismHeight={HOUR_HAND_PRISM_HEIGHT}
+          shadowId="hour-hand-3d-shadow"
+        />
+      </g>
+    );
+  }
+
   return (
-    <g data-hour-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
+    <g
+      data-hour-hand
+      data-hand-rendering="flat"
+      transform={`rotate(${rotation} ${CX} ${CY})`}
+    >
       <defs>
         <linearGradient id="hour-light-facet" x1="100%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stopColor="#777874" />
@@ -1535,7 +1607,7 @@ function HourHand({ rotation }: { rotation: number }) {
           <stop offset="100%" stopColor="#111210" />
         </linearGradient>
         <filter id="hour-hand-shadow" x="-30%" y="-30%" width="170%" height="170%">
-          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.125" />
         </filter>
       </defs>
 
@@ -1568,14 +1640,76 @@ function HourHand({ rotation }: { rotation: number }) {
   );
 }
 
-function MinuteHand({ rotation }: { rotation: number }) {
+function MinuteHand({
+  lightBrightness,
+  lightPosition,
+  mode,
+  rotation,
+}: {
+  lightBrightness: number;
+  lightPosition: Vec3;
+  mode: MarkerMode;
+  rotation: number;
+}) {
   const rear = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_REAR_RADIUS, 0);
   const upperBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, -MINUTE_HAND_HALF_WIDTH);
   const tip = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_TIP_RADIUS, 0);
   const lowerBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, MINUTE_HAND_HALF_WIDTH);
 
+  if (mode === "3d") {
+    const ridgeRear = handPrismPoint(
+      MINUTE_HAND_REAR_RADIUS,
+      0,
+      MINUTE_HAND_PRISM_HEIGHT,
+    );
+    const ridgeTip = handPrismPoint(
+      MINUTE_HAND_TIP_RADIUS,
+      0,
+      MINUTE_HAND_PRISM_HEIGHT,
+    );
+    const negativeBase = handPrismPoint(
+      MINUTE_HAND_BASE_RADIUS,
+      -MINUTE_HAND_HALF_WIDTH,
+      0,
+    );
+    const positiveBase = handPrismPoint(
+      MINUTE_HAND_BASE_RADIUS,
+      MINUTE_HAND_HALF_WIDTH,
+      0,
+    );
+    const faces: LitHandFace[] = [
+      {
+        key: "negative",
+        points: [ridgeRear, negativeBase, ridgeTip],
+        normal: faceNormal(ridgeRear, negativeBase, ridgeTip),
+      },
+      {
+        key: "positive",
+        points: [ridgeRear, ridgeTip, positiveBase],
+        normal: faceNormal(ridgeRear, ridgeTip, positiveBase),
+      },
+    ];
+
+    return (
+      <g data-minute-hand data-hand-rendering="3d">
+        <LitHandPrism
+          angle={MINUTE_HAND_ANGLE_DEG + rotation}
+          faces={faces}
+          lightBrightness={lightBrightness}
+          lightPosition={lightPosition}
+          prismHeight={MINUTE_HAND_PRISM_HEIGHT}
+          shadowId="minute-hand-3d-shadow"
+        />
+      </g>
+    );
+  }
+
   return (
-    <g data-minute-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
+    <g
+      data-minute-hand
+      data-hand-rendering="flat"
+      transform={`rotate(${rotation} ${CX} ${CY})`}
+    >
       <defs>
         <linearGradient id="minute-upper-facet" x1="0%" y1="100%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#757672" />
@@ -1588,7 +1722,7 @@ function MinuteHand({ rotation }: { rotation: number }) {
           <stop offset="100%" stopColor="#111210" />
         </linearGradient>
         <filter id="minute-hand-shadow" x="-20%" y="-20%" width="150%" height="160%">
-          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.125" />
         </filter>
       </defs>
 
@@ -1656,7 +1790,7 @@ function SecondsHand({ rotation }: { rotation: number }) {
           <stop offset="100%" stopColor="#242522" />
         </radialGradient>
         <filter id="seconds-hand-shadow" x="-30%" y="-10%" width="170%" height="130%">
-          <feDropShadow dx="5" dy="5" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+          <feDropShadow dx="5" dy="5" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
@@ -2280,8 +2414,22 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           >
             {dayHandVisible && <DayIndicatorHand rotation={dayHandRotation} />}
             {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
-            {hourHandVisible && <HourHand rotation={hourHandRotation} />}
-            {minuteHandVisible && <MinuteHand rotation={minuteHandRotation} />}
+            {hourHandVisible && (
+              <HourHand
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+                mode={markerMode}
+                rotation={hourHandRotation}
+              />
+            )}
+            {minuteHandVisible && (
+              <MinuteHand
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+                mode={markerMode}
+                rotation={minuteHandRotation}
+              />
+            )}
             {secondsHandVisible && <SecondsHand rotation={displayedSecondsHandRotation} />}
           </g>
         </svg>

@@ -199,9 +199,11 @@ light y = CY + v × radius
 light z = sqrt(1 - u² - v²) × radius
 ```
 
-Each opaque metallic facet combines ambient light, Lambertian diffuse response, inverse-distance attenuation, and a Blinn–Phong specular term. Normals and facet centers rotate with each marker, so the same light position produces different shading around the dial.
+Each opaque metallic facet combines ambient light, Lambertian diffuse response, inverse-distance attenuation, and a Blinn–Phong specular term. Specular response is masked by `N·L`, and all calculations happen in linear RGB before exponential tone mapping back to sRGB. Normals and facet centers rotate with each marker, so the same light position produces different shading around the dial. Applied hour markers deliberately cast no SVG shadow because they sit directly on the dial; only the raised 3D hands project shadows away from the point light.
 
-The date aperture consumes the same hemisphere position and brightness. Its four inset walls shade independently from their inward-facing normals, while a clipped soft cast shadow moves across the date wheel opposite the light direction. This dynamic layer sits above the extracted photographic bevel and below the hands.
+The marker's pointed inner end remains one uninterrupted diamond-shaped face with a single optical normal and fill, avoiding a false triangular seam. The hour hand retains two visible facets by tapering its raised ridge down to the mathematically solved tip height, making both four-point surfaces planar; the minute hand already consists of two planar triangles.
+
+The date aperture consumes the same hemisphere position, elevation, and brightness. Its four inset walls shade independently from their inward-facing normals, while a clipped soft cast shadow moves across the date wheel opposite the light direction. Shadow offset follows the horizontal/elevation ratio, is continuous at the zenith, and its directional contribution reaches zero at zero point-light brightness. This dynamic layer sits above the extracted photographic bevel and below the hands.
 
 ### Placement rules
 
@@ -249,7 +251,7 @@ Row 2 contains independent `ON/OFF` controls for:
 - **Minute**
 - **Second**
 
-Row 3 contains **Markers: Flat / 3D**, **Week +1**, **Day +1**, and **Date +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets, while 3D shows the opaque physically lit prisms. The persistent top-left **⚙️** button shows or hides every other interface control; controls are hidden by default. The calendar-hand controls advance their hand by one sector, store the result as a manual angle override, and select that hand so **Live** can return it to the current calendar position. Week, weekday, and date advances share the same short 180ms mechanical snap. **Date +1** targets the next measured per-date angle. Calendar hands and the date wheel retain unwrapped angles so crossing 360° continues clockwise.
+Row 3 contains **Markers: Flat / 3D**, **Week +1**, **Day +1**, and **Date +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets and original hour/minute hand artwork, while 3D shows opaque physically lit marker and hand prisms. The persistent top-left **⚙️** button shows or hides every other interface control; controls are hidden by default. The calendar-hand controls advance their hand by one sector, store the result as a manual angle override, and select that hand so **Live** can return it to the current calendar position. Week, weekday, and date advances share the same short 180ms mechanical snap. **Date +1** targets the next measured per-date angle. Calendar hands and the date wheel retain unwrapped angles so crossing 360° continues clockwise.
 
 Row 4 contains a live `X/Y` offset readout plus **X−**, **X+**, **Y−**, **Y+**, and **Capture angle**. Each offset click moves the rotating date-ring layer by one rendered pixel in the named direction. **Capture angle** appends the current wheel rotation, rounded to 0.1°, to a numbered on-screen list with a **Clear** action. The calibrated defaults are radius `826.868626px`, `X −3px`, and `Y +1px`.
 
@@ -257,7 +259,7 @@ All controls are client state inside `WeeklyCalendarWatch`.
 
 A fixed hand selector and right-side vertical `0–360°` slider can manually override any hand angle. Two left-side vertical sliders rotate the transparent date-ring overlay through `0–360°` and resize its radius from `600–1050px`; the size control shows its current radius. **Live** clears the selected hand override. **Pause** freezes live clock/calendar state; **Continue** clears manual overrides and resumes from the current time.
 
-In 3D marker mode, the left-side light panel can be dragged by its header. Its hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. Position and brightness update all marker facet colors immediately.
+In 3D marker mode, the left-side light panel can be dragged by its header. Its hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. Position and brightness update all marker, hour-hand, and minute-hand facet colors immediately.
 
 ---
 
@@ -344,7 +346,10 @@ tip radius      = 786
 rear radius     = -105
 base radius     = -25
 half-width      = 60
+ridge height    = 26
 ```
+
+In 3D mode, the silhouette is retained but the center line becomes a raised ridge. Two triangular sloping faces run from that ridge to the broad base vertices. Their normals are calculated from the 3D vertices and evaluated by the shared point-light model.
 
 The current minute angle includes elapsed seconds and milliseconds:
 
@@ -363,7 +368,10 @@ rear radius     = -125
 base radius     = -15
 half-width      = 72
 tip half-width  = 3
+ridge height    = 30
 ```
+
+Its 3D form uses the same two-face construction as the minute hand while preserving the broader base and dull three-pixel tip. Flat mode retains the original fixed gradients and traced silhouette.
 
 The current hour angle includes minutes, seconds, and milliseconds:
 
