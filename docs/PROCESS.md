@@ -45,7 +45,7 @@ Day:    25    26    27    28    29    30    31
 Angle:  4.9  16.6  28.0  39.7  51.4  62.9  74.5
 ```
 
-The wheel initializes to the measured day-1 angle, `86.3°`. **Date +1** now targets this complete per-date lookup table instead of applying a uniform increment. Targets remain unwrapped across 360° so the transition from day 24 (`353.5°`) to day 25 (`4.9°`) continues clockwise.
+The wheel synchronizes to the current local calendar date using the measured angle table. Moving its rotation slider or pressing **Date +1** creates a manual override for the rest of the session; reloading restores live-date synchronization. **Date +1** targets the complete per-date lookup table instead of applying a uniform increment. Targets remain unwrapped across 360° so the transition from day 24 (`353.5°`) to day 25 (`4.9°`) continues clockwise.
 
 ### Why the photo is imperfect
 

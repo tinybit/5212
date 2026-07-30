@@ -1858,6 +1858,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [dateWheelDay, setDateWheelDay] = useState<number>(
     DATE_WHEEL_CALIBRATION.initialDay,
   );
+  const [dateWheelManuallySet, setDateWheelManuallySet] = useState(false);
   const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
   const [dateRingOffset, setDateRingOffset] = useState({ x: -3, y: 1 });
   const [capturedDateRingAngles, setCapturedDateRingAngles] = useState<number[]>([]);
@@ -1887,6 +1888,14 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     advanceSecondsHand();
     return () => window.clearTimeout(timerId);
   }, [timeRunning]);
+
+  useEffect(() => {
+    if (clockTimeMs === null || dateWheelManuallySet) return;
+    const currentDate = new Date(clockTimeMs).getDate();
+    if (currentDate === dateWheelDay) return;
+    setDateWheelDay(currentDate);
+    setDateRingRotation(DATE_WHEEL_CALIBRATION.measuredAnglesDeg[currentDate - 1]);
+  }, [clockTimeMs, dateWheelDay, dateWheelManuallySet]);
 
   const clockTime = clockTimeMs === null ? null : new Date(clockTimeMs);
   const secondsWithMilliseconds =
@@ -1993,6 +2002,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const advanceDateWheel = () => {
     const nextDay = (dateWheelDay % DATE_WHEEL_CALIBRATION.dayCount) + 1;
     const measuredTarget = DATE_WHEEL_CALIBRATION.measuredAnglesDeg[nextDay - 1];
+    setDateWheelManuallySet(true);
     setDateRingRotation((angle) => {
       const completedTurns = Math.floor(angle / 360);
       let unwrappedTarget = completedTurns * 360 + measuredTarget;
@@ -2098,6 +2108,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
                   closestDay = index + 1;
                 }
               });
+              setDateWheelManuallySet(true);
               setDateRingRotation(angle);
               setDateWheelDay(closestDay);
             }}
