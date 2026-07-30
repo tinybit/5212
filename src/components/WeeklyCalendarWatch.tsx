@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Orthographic reference with track circles + sector lines + hour batons.
@@ -22,6 +22,9 @@ const MINUTE_DOT_RADIUS = 9;
 const R_WEEK_IN = 826;
 const R_WEEK_OUT = 928;
 const R_DIAL_EDGE = 1030;
+const WEEK_COUNT = 53;
+const WEEK_STEP_DEG = 360 / WEEK_COUNT;
+const WEEK_OFFSET_DEG = 6.5;
 
 /** Hour baton geometry (photo px). */
 const R_BATON_OUT = 799;
@@ -43,6 +46,32 @@ const SECOND_HAND_TAIL_END_Y = 1618;
 const SECOND_HAND_TAIL_POINT_Y = 1643;
 const SECOND_HAND_TAIL_SHOULDER_HALF_W = 13.5;
 const SECOND_HAND_TAIL_END_HALF_W = 27;
+const SECOND_HAND_TICKS_PER_SECOND = 8;
+const SECOND_HAND_TICK_MS = 1000 / SECOND_HAND_TICKS_PER_SECOND;
+const SECOND_HAND_DEGREES_PER_TICK = 6 / SECOND_HAND_TICKS_PER_SECOND;
+
+/** Minute-hand geometry measured from the orthographic reference. */
+const MINUTE_HAND_ANGLE_DEG = 56.85;
+const MINUTE_HAND_TIP_RADIUS = 786;
+const MINUTE_HAND_REAR_RADIUS = -105;
+const MINUTE_HAND_BASE_RADIUS = -25;
+const MINUTE_HAND_HALF_WIDTH = 60;
+
+/** Hour-hand geometry measured from the reference and traced silhouette. */
+const HOUR_HAND_ANGLE_DEG = -55.2;
+const HOUR_HAND_TIP_RADIUS = 480;
+const HOUR_HAND_REAR_RADIUS = -125;
+const HOUR_HAND_BASE_RADIUS = -15;
+const HOUR_HAND_HALF_WIDTH = 72;
+
+/** Week/month hammer-hand geometry measured from the reference. */
+const WEEK_HAND_REFERENCE_WEEK = 33;
+const WEEK_HAND_ANGLE_DEG = WEEK_OFFSET_DEG + (WEEK_HAND_REFERENCE_WEEK - 1) * WEEK_STEP_DEG;
+const WEEK_HAND_HEAD_RADIUS = 818;
+const WEEK_HAND_SHAFT_START_RADIUS = 25;
+const WEEK_HAND_SHAFT_HALF_WIDTH = 6.48;
+const WEEK_HAND_HEAD_HALF_LENGTH = 57;
+const WEEK_HAND_HEAD_HALF_THICKNESS = 11.7;
 
 const SINGLE_BATON_HOURS = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 
@@ -63,9 +92,15 @@ const MONTH_SECTOR_OFFSET_DEG = 29.75;
 const DAY_SECTOR_OFFSET_DEG = 25.2;
 const DAY_SECTOR_STEP_DEG = 360 / 7;
 
-const WEEK_COUNT = 53;
-const WEEK_STEP_DEG = 360 / WEEK_COUNT;
-const WEEK_OFFSET_DEG = 6.5;
+/** Day-of-week hammer-hand geometry measured from the reference. */
+const DAY_HAND_REFERENCE_DAY = 3;
+const DAY_HAND_ANGLE_DEG =
+  DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + DAY_HAND_REFERENCE_DAY * DAY_SECTOR_STEP_DEG;
+const DAY_HAND_HEAD_RADIUS = 432;
+const DAY_HAND_SHAFT_START_RADIUS = 25;
+const DAY_HAND_SHAFT_HALF_WIDTH = 7.5;
+const DAY_HAND_HEAD_HALF_LENGTH = 72;
+const DAY_HAND_HEAD_HALF_THICKNESS = WEEK_HAND_HEAD_HALF_THICKNESS;
 
 /**
  * Week-label glyph geometry, calibrated from the printed week "3":
@@ -611,6 +646,42 @@ function ptsToPath(pts: { x: number; y: number }[]) {
   return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + " Z";
 }
 
+function handPoint(angleDeg: number, along: number, lateral: number) {
+  const angle = (angleDeg * Math.PI) / 180;
+  return {
+    x: CX + Math.sin(angle) * along + Math.cos(angle) * lateral,
+    y: CY - Math.cos(angle) * along + Math.sin(angle) * lateral,
+  };
+}
+
+function annularSectorPath(angleDeg: number, radius: number, halfThickness: number, halfLength: number) {
+  const innerRadius = radius - halfThickness;
+  const outerRadius = radius + halfThickness;
+  const halfAngleDeg = ((halfLength / radius) * 180) / Math.PI;
+  const startAngle = angleDeg - halfAngleDeg;
+  const endAngle = angleDeg + halfAngleDeg;
+  const outerStart = polarPoint(startAngle, outerRadius);
+  const outerEnd = polarPoint(endAngle, outerRadius);
+  const innerEnd = polarPoint(endAngle, innerRadius);
+  const innerStart = polarPoint(startAngle, innerRadius);
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 0 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 0 0 ${innerStart.x} ${innerStart.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function isoWeekNumber(date: Date) {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNumber = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
+
 function HourBaton({
   degFrom12,
   lateralOffset = 0,
@@ -668,7 +739,237 @@ function HourBaton({
   );
 }
 
-function SecondsHand() {
+function WeekIndicatorHand({ rotation }: { rotation: number }) {
+  const headCenter = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, 0);
+  const shaft = [
+    handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, -WEEK_HAND_SHAFT_HALF_WIDTH),
+    handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, -WEEK_HAND_SHAFT_HALF_WIDTH),
+    handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, WEEK_HAND_SHAFT_HALF_WIDTH),
+    handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, WEEK_HAND_SHAFT_HALF_WIDTH),
+  ];
+  const headPath = annularSectorPath(
+    WEEK_HAND_ANGLE_DEG,
+    WEEK_HAND_HEAD_RADIUS,
+    WEEK_HAND_HEAD_HALF_THICKNESS,
+    WEEK_HAND_HEAD_HALF_LENGTH,
+  );
+
+  return (
+    <g
+      data-week-indicator-hand
+      transform={`rotate(${rotation} ${CX} ${CY})`}
+      opacity={1}
+    >
+      <defs>
+        <linearGradient
+          id="week-hand-shaft-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1={CX}
+          y1={CY}
+          x2={headCenter.x}
+          y2={headCenter.y}
+        >
+          <stop offset="0%" stopColor="#0d0c08" />
+          <stop offset="48%" stopColor="#0e0d09" />
+          <stop offset="53%" stopColor="#24201f" />
+          <stop offset="56%" stopColor="#2e2b26" />
+          <stop offset="100%" stopColor="#312e29" />
+        </linearGradient>
+        <linearGradient id="week-hand-head-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#c33a46" />
+          <stop offset="52%" stopColor="#b2303a" />
+          <stop offset="100%" stopColor="#8f1d28" />
+        </linearGradient>
+        <filter id="week-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+        </filter>
+      </defs>
+
+      <g filter="url(#week-hand-shadow)">
+        <path
+          d={ptsToPath(shaft)}
+          fill="url(#week-hand-shaft-gradient)"
+          stroke="#171815"
+          strokeWidth={1.44}
+        />
+        <path
+          d={headPath}
+          fill="url(#week-hand-head-gradient)"
+          stroke="#8f1d28"
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+      </g>
+    </g>
+  );
+}
+
+function DayIndicatorHand({ rotation }: { rotation: number }) {
+  const headCenter = handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, 0);
+  const shaft = [
+    handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, -DAY_HAND_SHAFT_HALF_WIDTH),
+    handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, -DAY_HAND_SHAFT_HALF_WIDTH),
+    handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, DAY_HAND_SHAFT_HALF_WIDTH),
+    handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, DAY_HAND_SHAFT_HALF_WIDTH),
+  ];
+  const headPath = annularSectorPath(
+    DAY_HAND_ANGLE_DEG,
+    DAY_HAND_HEAD_RADIUS,
+    DAY_HAND_HEAD_HALF_THICKNESS,
+    DAY_HAND_HEAD_HALF_LENGTH,
+  );
+
+  return (
+    <g data-day-indicator-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
+      <defs>
+        <linearGradient
+          id="day-hand-shaft-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1={CX}
+          y1={CY}
+          x2={headCenter.x}
+          y2={headCenter.y}
+        >
+          <stop offset="0%" stopColor="#29282b" />
+          <stop offset="23%" stopColor="#4a4947" />
+          <stop offset="100%" stopColor="#4c4b48" />
+        </linearGradient>
+        <linearGradient id="day-hand-head-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#bc3d47" />
+          <stop offset="52%" stopColor="#ac353e" />
+          <stop offset="100%" stopColor="#8e2530" />
+        </linearGradient>
+        <filter id="day-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+        </filter>
+      </defs>
+
+      <g filter="url(#day-hand-shadow)">
+        <path
+          d={ptsToPath(shaft)}
+          fill="url(#day-hand-shaft-gradient)"
+          stroke="#363633"
+          strokeWidth={1.4}
+        />
+        <path
+          d={headPath}
+          fill="url(#day-hand-head-gradient)"
+          stroke="#8e2530"
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+      </g>
+    </g>
+  );
+}
+
+function HourHand({ rotation }: { rotation: number }) {
+  const rear = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_REAR_RADIUS, 0);
+  const lightBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, HOUR_HAND_HALF_WIDTH);
+  const tip = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, 0);
+  const darkBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH);
+
+  return (
+    <g data-hour-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
+      <defs>
+        <linearGradient id="hour-light-facet" x1="100%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stopColor="#777874" />
+          <stop offset="60%" stopColor="#8f908c" />
+          <stop offset="100%" stopColor="#aaaBA7" />
+        </linearGradient>
+        <linearGradient id="hour-dark-facet" x1="100%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stopColor="#292a28" />
+          <stop offset="65%" stopColor="#20211f" />
+          <stop offset="100%" stopColor="#111210" />
+        </linearGradient>
+        <filter id="hour-hand-shadow" x="-30%" y="-30%" width="170%" height="170%">
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
+      </defs>
+
+      <g filter="url(#hour-hand-shadow)">
+        <path
+          d={ptsToPath([rear, lightBase, tip])}
+          fill="url(#hour-light-facet)"
+          stroke="#565753"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        <path
+          d={ptsToPath([rear, tip, darkBase])}
+          fill="url(#hour-dark-facet)"
+          stroke="#181917"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        <line
+          x1={rear.x}
+          y1={rear.y}
+          x2={tip.x}
+          y2={tip.y}
+          stroke="#50514e"
+          strokeWidth={2}
+          opacity={0.8}
+        />
+      </g>
+    </g>
+  );
+}
+
+function MinuteHand({ rotation }: { rotation: number }) {
+  const rear = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_REAR_RADIUS, 0);
+  const upperBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, -MINUTE_HAND_HALF_WIDTH);
+  const tip = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_TIP_RADIUS, 0);
+  const lowerBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, MINUTE_HAND_HALF_WIDTH);
+
+  return (
+    <g data-minute-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
+      <defs>
+        <linearGradient id="minute-upper-facet" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#757672" />
+          <stop offset="62%" stopColor="#8e8f8b" />
+          <stop offset="100%" stopColor="#b0b1ad" />
+        </linearGradient>
+        <linearGradient id="minute-lower-facet" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#2a2b29" />
+          <stop offset="65%" stopColor="#20211f" />
+          <stop offset="100%" stopColor="#111210" />
+        </linearGradient>
+        <filter id="minute-hand-shadow" x="-20%" y="-20%" width="150%" height="160%">
+          <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
+      </defs>
+
+      <g filter="url(#minute-hand-shadow)">
+        <path
+          d={ptsToPath([rear, upperBase, tip])}
+          fill="url(#minute-upper-facet)"
+          stroke="#565753"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        <path
+          d={ptsToPath([rear, tip, lowerBase])}
+          fill="url(#minute-lower-facet)"
+          stroke="#181917"
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        <line
+          x1={rear.x}
+          y1={rear.y}
+          x2={tip.x}
+          y2={tip.y}
+          stroke="#50514e"
+          strokeWidth={2}
+          opacity={0.8}
+        />
+      </g>
+    </g>
+  );
+}
+
+function SecondsHand({ rotation }: { rotation: number }) {
   const upperBlade = [
     { x: CX - SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
     { x: CX + SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
@@ -684,7 +985,7 @@ function SecondsHand() {
   ];
 
   return (
-    <g opacity={0.92}>
+    <g data-seconds-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
       <defs>
         <linearGradient id="seconds-tail-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#62635f" />
@@ -747,6 +1048,50 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
   const [drawVisible, setDrawVisible] = useState(true);
   const [guidesVisible, setGuidesVisible] = useState(true);
+  const [weekHandVisible, setWeekHandVisible] = useState(true);
+  const [dayHandVisible, setDayHandVisible] = useState(true);
+  const [hourHandVisible, setHourHandVisible] = useState(true);
+  const [minuteHandVisible, setMinuteHandVisible] = useState(true);
+  const [secondsHandVisible, setSecondsHandVisible] = useState(true);
+  const [clockTimeMs, setClockTimeMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    let timerId: number;
+
+    const advanceSecondsHand = () => {
+      const now = Date.now();
+      setClockTimeMs(now);
+
+      const nextTickDelay = SECOND_HAND_TICK_MS - (now % SECOND_HAND_TICK_MS);
+      timerId = window.setTimeout(advanceSecondsHand, nextTickDelay);
+    };
+
+    advanceSecondsHand();
+    return () => window.clearTimeout(timerId);
+  }, []);
+
+  const clockTime = clockTimeMs === null ? null : new Date(clockTimeMs);
+  const secondsWithMilliseconds =
+    clockTime === null ? 0 : clockTime.getSeconds() + clockTime.getMilliseconds() / 1000;
+  const secondsHandRotation =
+    clockTimeMs === null
+      ? 0
+      : Math.floor((clockTimeMs % 60_000) / SECOND_HAND_TICK_MS) * SECOND_HAND_DEGREES_PER_TICK;
+  const minuteHandAngle =
+    clockTime === null ? MINUTE_HAND_ANGLE_DEG : (clockTime.getMinutes() + secondsWithMilliseconds / 60) * 6;
+  const hourHandAngle =
+    clockTime === null
+      ? HOUR_HAND_ANGLE_DEG
+      : ((clockTime.getHours() % 12) + clockTime.getMinutes() / 60 + secondsWithMilliseconds / 3600) * 30;
+  const minuteHandRotation = minuteHandAngle - MINUTE_HAND_ANGLE_DEG;
+  const hourHandRotation = hourHandAngle - HOUR_HAND_ANGLE_DEG;
+  const currentWeek = clockTime === null ? WEEK_HAND_REFERENCE_WEEK : isoWeekNumber(clockTime);
+  const weekHandAngle = WEEK_OFFSET_DEG + (currentWeek - 1) * WEEK_STEP_DEG;
+  const weekHandRotation = weekHandAngle - WEEK_HAND_ANGLE_DEG;
+  const currentDay = clockTime === null ? DAY_HAND_REFERENCE_DAY : clockTime.getDay();
+  const dayHandAngle = DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + currentDay * DAY_SECTOR_STEP_DEG;
+  const dayHandRotation = dayHandAngle - DAY_HAND_ANGLE_DEG;
+
   const photoOpacity = PHOTO_OPACITY[opacityIdx];
   const monthSectors = monthSectorLines();
   const daySectors = daySectorLines();
@@ -915,7 +1260,11 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
 
           <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
-          <SecondsHand />
+          {dayHandVisible && <DayIndicatorHand rotation={dayHandRotation} />}
+          {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
+          {hourHandVisible && <HourHand rotation={hourHandRotation} />}
+          {minuteHandVisible && <MinuteHand rotation={minuteHandRotation} />}
+          {secondsHandVisible && <SecondsHand rotation={secondsHandRotation} />}
         </svg>
 
         {/* Calibrated center guides for every week digit, month letter, and day letter. */}
@@ -970,8 +1319,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         </svg>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <button
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
           type="button"
           onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
@@ -992,6 +1342,49 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         >
           {guidesVisible ? "Guides: ON" : "Guides: OFF"}
         </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+          type="button"
+          aria-pressed={weekHandVisible}
+          onClick={() => setWeekHandVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {weekHandVisible ? "Week: ON" : "Week: OFF"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={dayHandVisible}
+          onClick={() => setDayHandVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {dayHandVisible ? "Day: ON" : "Day: OFF"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={hourHandVisible}
+          onClick={() => setHourHandVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {hourHandVisible ? "Hour: ON" : "Hour: OFF"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={minuteHandVisible}
+          onClick={() => setMinuteHandVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {minuteHandVisible ? "Minute: ON" : "Minute: OFF"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={secondsHandVisible}
+          onClick={() => setSecondsHandVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {secondsHandVisible ? "Second: ON" : "Second: OFF"}
+        </button>
+        </div>
       </div>
     </div>
   );
