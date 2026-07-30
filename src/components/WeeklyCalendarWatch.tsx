@@ -1063,9 +1063,10 @@ function SecondsHand({ rotation }: { rotation: number }) {
 
 export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
-  const [referenceIdx, setReferenceIdx] = useState(0);
+  const [referenceIdx, setReferenceIdx] = useState(1);
   const [drawVisible, setDrawVisible] = useState(true);
-  const [guidesVisible, setGuidesVisible] = useState(true);
+  const [textVisible, setTextVisible] = useState(false);
+  const [guidesVisible, setGuidesVisible] = useState(false);
   const [handsVisible, setHandsVisible] = useState(true);
   const [weekHandVisible, setWeekHandVisible] = useState(true);
   const [dayHandVisible, setDayHandVisible] = useState(true);
@@ -1321,7 +1322,12 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
           <HourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
           <HourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
+          </g>
 
+          <g
+            className="transition-opacity duration-200"
+            style={{ opacity: textVisible ? 1 : 0 }}
+          >
           {digitMarkers.map((marker) => (
             <text
               key={`digit-${marker.week}-${marker.index}`}
@@ -1372,7 +1378,12 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               {marker.glyph.toUpperCase()}
             </text>
           ))}
+          </g>
 
+          <g
+            className="transition-opacity duration-200"
+            style={{ opacity: drawVisible ? 1 : 0 }}
+          >
           <circle cx={CX} cy={CY} r={37} fill="#000000" />
           <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
 
@@ -1443,32 +1454,39 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           <button
           type="button"
           onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {PHOTO_LABEL[opacityIdx]}
         </button>
         <button
           type="button"
           onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {referenceImage.label}
         </button>
         <button
           type="button"
           onClick={() => setDrawVisible((v) => !v)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {drawVisible ? "Drawing: ON" : "Drawing: OFF"}
         </button>
         <button
           type="button"
+          onClick={() => setTextVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {textVisible ? "Text: ON" : "Text: OFF"}
+        </button>
+        <button
+          type="button"
           onClick={() => setGuidesVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {guidesVisible ? "Guides: ON" : "Guides: OFF"}
         </button>
@@ -1476,7 +1494,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           type="button"
           aria-pressed={handsVisible}
           onClick={() => setHandsVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {handsVisible ? "Hands: ON" : "Hands: OFF"}
         </button>

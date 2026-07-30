@@ -191,11 +191,14 @@ Row 1:
 
 - **Photo** — cycles `1 → 0.5 → 0` (`Photo: 100% / 50% / OFF`).
 - **Reference** — switches between the complete watch image and the aligned dial-only image.
-- **Drawing** — shows or hides dial lines, text, markers, batons, and center diagnostics.
+- **Drawing** — shows or hides dial lines, markers, batons, and center diagnostics.
+- **Text** — independently shows or hides generated week, month, and weekday glyphs.
 - **Guides** — shows or hides all glyph-center circles and radial alignment rays.
 - **Hands** — shows or hides the complete programmatic hand stack.
 
-Photo, drawing, guides, and hands are independent layers. Toggling any one must not mutate or override the state of another.
+Photo, drawing, text, guides, and hands are independent layers. Toggling any one must not mutate or override the state of another.
+
+Default state: Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, and Hands ON.
 
 Row 2 contains independent `ON/OFF` controls for:
 

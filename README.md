@@ -48,11 +48,12 @@ npx eslint src/components/WeeklyCalendarWatch.tsx
 
 The dial controls are arranged in two rows:
 
-1. `Photo`, `Reference`, `Drawing`, `Guides`, `Hands`
+1. `Photo`, `Reference`, `Drawing`, `Text`, `Guides`, `Hands`
 2. `Week`, `Day`, `Hour`, `Minute`, `Second`
 
-`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. Every other control independently toggles its named SVG layer.
-The four top-level layers are independent: the reference photo, dial drawing, alignment guides, and complete hand stack. The second row controls individual hands within the hand layer.
+`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer.
+
+The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, and Hands ON.
 
 The fixed controls above and beside the dial select any hand, rotate it through 360°, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle.
 
