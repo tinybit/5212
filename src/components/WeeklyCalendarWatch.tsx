@@ -39,12 +39,13 @@ const MINUTE_SKIP = new Set<number>([
   13, 15, // date window neighbors
 ]);
 
-const MAGENTA = "#ff0066";
-const CYAN = "#00ccff";
-const ORANGE = "#ff8c00";
+const MAGENTA = "#000000";
+const CYAN = "#000000";
+const ORANGE = "#000000";
+const DIAL_STROKE_WIDTH = 9;
 
 const R_WEEK_DOT = (R_WEEK_IN + R_WEEK_OUT) / 2;
-const WEEK_DOT_RADIUS = 18.48;
+const WEEK_DOT_RADIUS = 15.9649875;
 
 const MONTH_SECTOR_OFFSET_DEG = 29.75;
 const DAY_SECTOR_OFFSET_DEG = 25.2;
@@ -690,7 +691,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     <div className={`flex flex-col items-center gap-3 ${className}`}>
       <div className="relative w-full">
         <img
-          src="/reference-ortho.jpg"
+          src="/reference-ortho-cream.jpg"
           alt="Orthographic weekly calendar dial reference"
           className="block h-auto w-full select-none transition-opacity duration-200"
           style={{ opacity: photoOpacity }}
@@ -703,9 +704,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           aria-hidden
           style={{ opacity: drawVisible ? 1 : 0 }}
         >
-          <circle cx={CX} cy={CY} r={R_DIAL_EDGE} fill="none" stroke={MAGENTA} strokeWidth="3" />
-          <circle cx={CX} cy={CY} r={R_WEEK_OUT} fill="none" stroke={MAGENTA} strokeWidth="3" />
-          <circle cx={CX} cy={CY} r={R_WEEK_IN} fill="none" stroke={MAGENTA} strokeWidth="3" />
+          <circle cx={CX} cy={CY} r={R_DIAL_EDGE} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
+          <circle cx={CX} cy={CY} r={R_WEEK_OUT} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
+          <circle cx={CX} cy={CY} r={R_WEEK_IN} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
 
           {monthSectors.map((s, i) => (
             <line
@@ -715,7 +716,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x2={s.x2}
               y2={s.y2}
               stroke={MAGENTA}
-              strokeWidth="2.5"
+              strokeWidth={DIAL_STROKE_WIDTH}
               strokeLinecap="butt"
             />
           ))}
@@ -728,7 +729,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x2={s.x2}
               y2={s.y2}
               stroke={MAGENTA}
-              strokeWidth="2"
+              strokeWidth={DIAL_STROKE_WIDTH}
               strokeLinecap="butt"
             />
           ))}
@@ -738,10 +739,10 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               key={`wd${i}`}
               cx={p.x}
               cy={p.y}
-              r={8}
-              fill="none"
+              r={WEEK_DOT_RADIUS}
+              fill={MAGENTA}
               stroke={MAGENTA}
-              strokeWidth={2.5}
+              strokeWidth={DIAL_STROKE_WIDTH}
             />
           ))}
 
@@ -749,8 +750,8 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             <circle key={`md${i}`} cx={p.x} cy={p.y} r={MINUTE_DOT_RADIUS} fill={ORANGE} />
           ))}
 
-          <circle cx={CX} cy={CY} r={R_DAY_OUT} fill="none" stroke={CYAN} strokeWidth="3" />
-          <circle cx={CX} cy={CY} r={R_DAY_IN} fill="none" stroke={CYAN} strokeWidth="3" />
+          <circle cx={CX} cy={CY} r={R_DAY_OUT} fill="none" stroke={CYAN} strokeWidth={DIAL_STROKE_WIDTH} />
+          <circle cx={CX} cy={CY} r={R_DAY_IN} fill="none" stroke={CYAN} strokeWidth={DIAL_STROKE_WIDTH} />
 
           {daySectors.map((s, i) => (
             <line
@@ -760,7 +761,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x2={s.x2}
               y2={s.y2}
               stroke={CYAN}
-              strokeWidth="2.5"
+              strokeWidth={DIAL_STROKE_WIDTH}
               strokeLinecap="butt"
             />
           ))}
@@ -778,10 +779,10 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x={marker.digitX}
               y={marker.digitY}
               transform={`rotate(${marker.rotation} ${marker.digitX} ${marker.digitY})`}
-              fill="#ffffff"
+              fill="#000000"
               fontFamily="'Indie Flower', cursive"
               fontSize={WEEK_DIGIT_FONT_SIZE * marker.scale}
-              fontWeight={400}
+              fontWeight={700}
               textAnchor="middle"
               dominantBaseline="central"
             >
@@ -795,10 +796,10 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x={marker.x}
               y={marker.y}
               transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
-              fill="#ffffff"
+              fill="#000000"
               fontFamily="'Indie Flower', cursive"
               fontSize={MONTH_GLYPH_FONT_SIZE}
-              fontWeight={400}
+              fontWeight={700}
               textAnchor="middle"
               dominantBaseline="central"
             >
@@ -812,10 +813,10 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               x={marker.x}
               y={marker.y}
               transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
-              fill="#ffffff"
+              fill="#000000"
               fontFamily="'Indie Flower', cursive"
               fontSize={DAY_GLYPH_FONT_SIZE}
-              fontWeight={400}
+              fontWeight={700}
               textAnchor="middle"
               dominantBaseline="central"
             >
@@ -823,10 +824,10 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             </text>
           ))}
 
-          <circle cx={CX} cy={CY} r={37} fill="#00a2ff" />
-          <circle cx={CX} cy={CY} r={7} fill="#ff2bd6" stroke="#fff" strokeWidth="2" />
+          <circle cx={CX} cy={CY} r={37} fill="#000000" />
+          <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
 
-          <circle cx={CX} cy={CY} r={10} fill="#00ffff" stroke="#000" strokeWidth={2} />
+          <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
         </svg>
 
         {/* Calibrated center guides for every week digit, month letter, and day letter. */}
