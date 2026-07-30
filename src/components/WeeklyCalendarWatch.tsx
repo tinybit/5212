@@ -63,8 +63,16 @@ const WEEK_OFFSET_DEG = 6.5;
  */
 const R_WEEK_GLYPH = Math.hypot(1681 - CX, 511 - CY);
 const WEEK_DIGIT_SPACING = 48;
-const WEEK_DIGIT_MARKER_RADIUS = 42;
+const GLYPH_GUIDE_CIRCLE_RADIUS = 42;
 const WEEK_DIGIT_FONT_SIZE = 100;
+const MONTH_GLYPH_FONT_SIZE = 100;
+const DAY_GLYPH_FONT_SIZE = 65.61;
+const DAY_GLYPH_SPACING_SCALE = 1.1;
+const DAY_GLYPH_ROTATION_ADJUSTMENTS: Record<string, number> = {
+  "TUESDAY-5": 180,
+  "TUESDAY-6": 180,
+  "FRIDAY-0": 180,
+};
 /** Per-glyph radial nudges in photo pixels. Positive = out, negative = in. */
 const WEEK_DIGIT_RADIAL_ADJUSTMENTS: Record<string, number> = {
   "5-0": -3,
@@ -121,6 +129,271 @@ const WEEK_DIGIT_SCALE_ADJUSTMENTS: Record<string, number> = {
 const WEEK_DIGIT_ROTATION_ADJUSTMENTS: Record<string, number> = {
   "1-0": -7,
 };
+
+/**
+ * Black-pixel centroids measured from polar-unwrapped month sectors in
+ * reference-ortho.jpg. Coordinates are in native photo pixels.
+ */
+const MONTH_GLYPH_CENTERS = [
+  [
+    "JANUARY",
+    [
+      [1462.8, 367.6],
+      [1506.6, 361.7],
+      [1567.8, 369.1],
+      [1629.0, 388.4],
+      [1690.4, 402.3],
+      [1748.2, 421.2],
+      [1801.9, 443.2],
+    ],
+  ],
+  [
+    "FEBRUARY",
+    [
+      [1930.2, 511.2],
+      [1965.5, 547.5],
+      [2008.3, 581.0],
+      [2049.0, 614.7],
+      [2088.1, 663.9],
+      [2127.2, 698.7],
+      [2164.9, 743.1],
+      [2199.7, 786.0],
+    ],
+  ],
+  [
+    "MARCH",
+    [
+      [2278.3, 945.5],
+      [2305.6, 1020.7],
+      [2329.1, 1080.6],
+      [2339.5, 1144.8],
+      [2354.1, 1212.6],
+    ],
+  ],
+  [
+    "APRIL",
+    [
+      [2296.4, 1686.6],
+      [2307.7, 1626.2],
+      [2330.2, 1567.1],
+      [2344.6, 1517.7],
+      [2358.2, 1481.4],
+    ],
+  ],
+  [
+    "MAY",
+    [
+      [2023.3, 2070.9],
+      [2082.9, 2014.6],
+      [2120.5, 1963.5],
+    ],
+  ],
+  [
+    "JUNE",
+    [
+      [1529.9, 2308.1],
+      [1591.0, 2294.1],
+      [1667.3, 2268.5],
+      [1731.4, 2245.5],
+    ],
+  ],
+  [
+    "JULY",
+    [
+      [1031.4, 2252.0],
+      [1099.6, 2270.8],
+      [1156.9, 2295.7],
+      [1221.9, 2289.9],
+    ],
+  ],
+  [
+    "AUGUST",
+    [
+      [595.3, 1914.8],
+      [629.8, 1962.8],
+      [674.4, 2011.7],
+      [716.5, 2056.1],
+      [764.5, 2092.1],
+      [816.9, 2115.4],
+    ],
+  ],
+  [
+    "SEPTEMBER",
+    [
+      [404.8, 1397.0],
+      [410.5, 1437.8],
+      [425.5, 1483.5],
+      [434.1, 1530.2],
+      [435.0, 1573.7],
+      [453.8, 1629.1],
+      [471.1, 1683.8],
+      [487.4, 1725.9],
+      [513.6, 1767.6],
+    ],
+  ],
+  [
+    "OCTOBER",
+    [
+      [408.5, 1258.5],
+      [418.4, 1200.8],
+      [412.8, 1138.4],
+      [435.4, 1082.4],
+      [456.5, 1022.5],
+      [474.3, 971.6],
+      [496.0, 914.3],
+    ],
+  ],
+  [
+    "NOVEMBER",
+    [
+      [567.5, 793.3],
+      [597.8, 750.8],
+      [626.2, 711.9],
+      [656.8, 674.2],
+      [698.8, 630.3],
+      [744.2, 591.8],
+      [782.0, 559.6],
+      [818.2, 527.6],
+    ],
+  ],
+  [
+    "DECEMBER",
+    [
+      [958.8, 448.2],
+      [1001.8, 428.7],
+      [1044.9, 411.5],
+      [1091.5, 394.2],
+      [1151.2, 381.7],
+      [1208.0, 367.9],
+      [1255.0, 361.2],
+      [1304.7, 353.1],
+    ],
+  ],
+] as const;
+
+/**
+ * Black-pixel centroids measured from polar-unwrapped day-name sectors in
+ * reference-ortho.jpg. Coordinates are in native photo pixels.
+ */
+const DAY_GLYPH_CENTERS = [
+  [
+    "SUNDAY",
+    [
+      [1253.1, 853.4],
+      [1307.5, 848.1],
+      [1361.5, 838.9],
+      [1416.3, 839.9],
+      [1471.8, 844.6],
+      [1516.5, 850.6],
+    ],
+  ],
+  [
+    "MONDAY",
+    [
+      [1668.4, 931.7],
+      [1718.1, 972.3],
+      [1758.5, 1009.0],
+      [1784.2, 1043.4],
+      [1811.6, 1091.5],
+      [1842.4, 1144.8],
+    ],
+  ],
+  [
+    "TUESDAY",
+    [
+      [1790.6, 1589.3],
+      [1829.6, 1548.1],
+      [1846.2, 1497.1],
+      [1866.7, 1434.3],
+      [1873.3, 1378.7],
+      [1875.0, 1314.0],
+      [1870.7, 1264.1],
+    ],
+  ],
+  [
+    "WEDNESDAY",
+    [
+      [1443.0, 1817.4],
+      [1490.7, 1809.5],
+      [1536.0, 1800.2],
+      [1577.9, 1783.6],
+      [1612.2, 1767.2],
+      [1651.3, 1745.1],
+      [1686.9, 1720.8],
+      [1718.4, 1693.6],
+      [1741.8, 1664.8],
+    ],
+  ],
+  [
+    "THURSDAY",
+    [
+      [1040.6, 1680.9],
+      [1068.4, 1713.4],
+      [1107.5, 1746.4],
+      [1154.7, 1765.7],
+      [1198.7, 1790.8],
+      [1244.9, 1806.9],
+      [1291.0, 1817.2],
+      [1335.9, 1820.3],
+    ],
+  ],
+  [
+    "FRIDAY",
+    [
+      [899.0, 1309.5],
+      [895.9, 1369.4],
+      [896.4, 1419.7],
+      [907.2, 1463.8],
+      [924.7, 1519.7],
+      [954.3, 1567.3],
+    ],
+  ],
+  [
+    "SATURDAY",
+    [
+      [914.1, 1174.3],
+      [936.7, 1113.8],
+      [968.1, 1066.7],
+      [982.9, 1040.7],
+      [1004.2, 1007.6],
+      [1044.0, 969.7],
+      [1087.6, 934.4],
+      [1119.4, 909.8],
+    ],
+  ],
+] as const;
+
+function averageMonthGlyphRadius() {
+  let totalRadius = 0;
+  let glyphCount = 0;
+
+  for (const [, centers] of MONTH_GLYPH_CENTERS) {
+    for (const [x, y] of centers) {
+      totalRadius += Math.hypot(x - CX, y - CY);
+      glyphCount += 1;
+    }
+  }
+
+  return totalRadius / glyphCount;
+}
+
+const R_MONTH_GLYPH_GUIDE = averageMonthGlyphRadius();
+
+function averageDayGlyphRadius() {
+  let totalRadius = 0;
+  let glyphCount = 0;
+
+  for (const [, centers] of DAY_GLYPH_CENTERS) {
+    for (const [x, y] of centers) {
+      totalRadius += Math.hypot(x - CX, y - CY);
+      glyphCount += 1;
+    }
+  }
+
+  return totalRadius / glyphCount;
+}
+
+const R_DAY_GLYPH_GUIDE = averageDayGlyphRadius();
 
 const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
@@ -244,6 +517,74 @@ function weekDigitMarkers() {
   return markers;
 }
 
+function monthGlyphMarkers() {
+  return MONTH_GLYPH_CENTERS.flatMap(([month, centers]) =>
+    centers.map(([measuredX, measuredY], index) => {
+      const measuredRadius = Math.hypot(measuredX - CX, measuredY - CY);
+      const guideScale = R_MONTH_GLYPH_GUIDE / measuredRadius;
+      const x = CX + (measuredX - CX) * guideScale;
+      const y = CY + (measuredY - CY) * guideScale;
+      const rayScale = R_DIAL_EDGE / R_MONTH_GLYPH_GUIDE;
+      const rayAngle = (Math.atan2(x - CX, CY - y) * 180) / Math.PI;
+      const normalizedRayAngle = (rayAngle + 360) % 360;
+      const rotation =
+        normalizedRayAngle > 90 && normalizedRayAngle < 270
+          ? normalizedRayAngle - 180
+          : normalizedRayAngle;
+
+      return {
+        month,
+        glyph: month[index],
+        index,
+        x,
+        y,
+        rayX: CX + (x - CX) * rayScale,
+        rayY: CY + (y - CY) * rayScale,
+        rotation,
+      };
+    }),
+  );
+}
+
+function dayGlyphMarkers() {
+  return DAY_GLYPH_CENTERS.flatMap(([day, centers], dayIndex) => {
+    const sectorCenter =
+      DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + dayIndex * DAY_SECTOR_STEP_DEG;
+    const measuredAngles = centers.map(([measuredX, measuredY]) => {
+      const normalizedAngle =
+        ((Math.atan2(measuredX - CX, CY - measuredY) * 180) / Math.PI + 360) % 360;
+      const turnsFromSectorCenter = Math.round((sectorCenter - normalizedAngle) / 360);
+      return normalizedAngle + turnsFromSectorCenter * 360;
+    });
+    const labelCenter =
+      measuredAngles.reduce((sum, measuredAngle) => sum + measuredAngle, 0) /
+      measuredAngles.length;
+
+    return centers.map((_, index) => {
+      const angle =
+        labelCenter + (measuredAngles[index] - labelCenter) * DAY_GLYPH_SPACING_SCALE;
+      const { x, y } = polarPoint(angle, R_DAY_GLYPH_GUIDE);
+      const rayScale = R_DIAL_EDGE / R_DAY_GLYPH_GUIDE;
+      const normalizedRayAngle = (angle + 360) % 360;
+      const rotation =
+        normalizedRayAngle > 90 && normalizedRayAngle < 270
+          ? normalizedRayAngle - 180
+          : normalizedRayAngle;
+
+      return {
+        day,
+        glyph: day[index],
+        index,
+        x,
+        y,
+        rayX: CX + (x - CX) * rayScale,
+        rayY: CY + (y - CY) * rayScale,
+        rotation: rotation + (DAY_GLYPH_ROTATION_ADJUSTMENTS[`${day}-${index}`] ?? 0),
+      };
+    });
+  });
+}
+
 function minuteDots() {
   const dots = [];
   for (let k = 0; k < 60; k++) {
@@ -317,13 +658,32 @@ function HourBaton({
 export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
   const [drawVisible, setDrawVisible] = useState(true);
-  const [digitGuidesVisible, setDigitGuidesVisible] = useState(true);
+  const [guidesVisible, setGuidesVisible] = useState(true);
   const photoOpacity = PHOTO_OPACITY[opacityIdx];
   const monthSectors = monthSectorLines();
   const daySectors = daySectorLines();
   const weekSectors = weekSectorLines();
   const wDots = weekDots();
   const digitMarkers = weekDigitMarkers();
+  const monthMarkers = monthGlyphMarkers();
+  const dayMarkers = dayGlyphMarkers();
+  const guideMarkers = [
+    ...digitMarkers.map((marker) => ({
+      key: `week-${marker.week}-${marker.index}`,
+      ...marker,
+      radius: GLYPH_GUIDE_CIRCLE_RADIUS,
+    })),
+    ...monthMarkers.map((marker) => ({
+      key: `month-${marker.month}-${marker.index}`,
+      ...marker,
+      radius: GLYPH_GUIDE_CIRCLE_RADIUS,
+    })),
+    ...dayMarkers.map((marker) => ({
+      key: `day-${marker.day}-${marker.index}`,
+      ...marker,
+      radius: GLYPH_GUIDE_CIRCLE_RADIUS,
+    })),
+  ];
   const mDots = minuteDots();
 
   return (
@@ -429,22 +789,56 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             </text>
           ))}
 
+          {monthMarkers.map((marker) => (
+            <text
+              key={`month-glyph-${marker.month}-${marker.index}`}
+              x={marker.x}
+              y={marker.y}
+              transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
+              fill="#ffffff"
+              fontFamily="'Indie Flower', cursive"
+              fontSize={MONTH_GLYPH_FONT_SIZE}
+              fontWeight={400}
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {marker.glyph.toUpperCase()}
+            </text>
+          ))}
+
+          {dayMarkers.map((marker) => (
+            <text
+              key={`day-glyph-${marker.day}-${marker.index}`}
+              x={marker.x}
+              y={marker.y}
+              transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
+              fill="#ffffff"
+              fontFamily="'Indie Flower', cursive"
+              fontSize={DAY_GLYPH_FONT_SIZE}
+              fontWeight={400}
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {marker.glyph.toUpperCase()}
+            </text>
+          ))}
+
           <circle cx={CX} cy={CY} r={37} fill="#00a2ff" />
           <circle cx={CX} cy={CY} r={7} fill="#ff2bd6" stroke="#fff" strokeWidth="2" />
 
           <circle cx={CX} cy={CY} r={10} fill="#00ffff" stroke="#000" strokeWidth={2} />
         </svg>
 
-        {/* One marker per printed glyph in the odd week-number sequence 1–53. */}
+        {/* Calibrated center guides for every week digit, month letter, and day letter. */}
         <svg
           className="pointer-events-none absolute inset-0 h-full w-full"
           viewBox={`0 0 ${IMG_W} ${IMG_H}`}
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
-          style={{ opacity: digitGuidesVisible ? 1 : 0 }}
+          style={{ opacity: guidesVisible ? 1 : 0 }}
         >
-          {digitMarkers.map((marker) => (
-            <g key={`ray-${marker.week}-${marker.index}`} opacity={0.72}>
+          {guideMarkers.map((marker) => (
+            <g key={`ray-${marker.key}`} opacity={0.72}>
               <line
                 x1={CX}
                 y1={CY}
@@ -464,12 +858,12 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             </g>
           ))}
 
-          {digitMarkers.map((marker) => (
-            <g key={`${marker.week}-${marker.index}`}>
+          {guideMarkers.map((marker) => (
+            <g key={marker.key}>
               <circle
                 cx={marker.x}
                 cy={marker.y}
-                r={WEEK_DIGIT_MARKER_RADIUS + 5}
+                r={marker.radius + 5}
                 fill="none"
                 stroke="#000000"
                 strokeWidth={8}
@@ -477,7 +871,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               <circle
                 cx={marker.x}
                 cy={marker.y}
-                r={WEEK_DIGIT_MARKER_RADIUS}
+                r={marker.radius}
                 fill="none"
                 stroke="#00ff00"
                 strokeWidth={5}
@@ -493,21 +887,21 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
-          {PHOTO_LABEL[opacityIdx]} · tap to cycle
+          {PHOTO_LABEL[opacityIdx]}
         </button>
         <button
           type="button"
           onClick={() => setDrawVisible((v) => !v)}
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
-          {drawVisible ? "Drawing: ON" : "Drawing: OFF"} · tap to toggle
+          {drawVisible ? "Drawing: ON" : "Drawing: OFF"}
         </button>
         <button
           type="button"
-          onClick={() => setDigitGuidesVisible((visible) => !visible)}
+          onClick={() => setGuidesVisible((visible) => !visible)}
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
-          {digitGuidesVisible ? "Digit guides: ON" : "Digit guides: OFF"} · tap to toggle
+          {guidesVisible ? "Guides: ON" : "Guides: OFF"}
         </button>
       </div>
     </div>
