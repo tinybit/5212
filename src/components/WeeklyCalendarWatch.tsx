@@ -54,6 +54,22 @@ const WEEK_COUNT = 53;
 const WEEK_STEP_DEG = 360 / WEEK_COUNT;
 const WEEK_OFFSET_DEG = 6.5;
 
+/**
+ * User-locked gap ray left of week 1 (CW from 12). Do not move.
+ * Confirmed: all pixels of printed 1 are to the right of this ray.
+ */
+const RAY_BEFORE_W1 = 5.4221;
+const RAY_R = 1120;
+
+/**
+ * Printed week "3" on reference-ortho.jpg (full-res, no resample).
+ * CORRECTED: center (1681, 511) = black digit "3" at ang≈20.12°.
+ * Previous wrong center (1777, 550) was the separator between 3 and 5.
+ * Sequence: sep@13° · 3@20° · sep@27° · 5@33° · sep@40°.
+ * Native proof: PROOF-3-at-1681.png / PROOF-wide.png
+ */
+const WEEK_3 = { cx: 1681, cy: 511, r: 48 };
+
 const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
 
@@ -127,6 +143,32 @@ function minuteDots() {
 
 function ptsToPath(pts: { x: number; y: number }[]) {
   return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + " Z";
+}
+
+function Ray({ ang, color, width = 3 }: { ang: number; color: string; width?: number }) {
+  const end = polarPoint(ang, RAY_R);
+  return (
+    <g>
+      <line
+        x1={CX}
+        y1={CY}
+        x2={end.x}
+        y2={end.y}
+        stroke="#000000"
+        strokeWidth={width + 3}
+        strokeLinecap="butt"
+      />
+      <line
+        x1={CX}
+        y1={CY}
+        x2={end.x}
+        y2={end.y}
+        stroke={color}
+        strokeWidth={width}
+        strokeLinecap="butt"
+      />
+    </g>
+  );
 }
 
 function HourBaton({
@@ -244,7 +286,15 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           ))}
 
           {wDots.map((p, i) => (
-            <circle key={`wd${i}`} cx={p.x} cy={p.y} r={WEEK_DOT_RADIUS} fill={MAGENTA} />
+            <circle
+              key={`wd${i}`}
+              cx={p.x}
+              cy={p.y}
+              r={8}
+              fill="none"
+              stroke={MAGENTA}
+              strokeWidth={2.5}
+            />
           ))}
 
           {mDots.map((p, i) => (
@@ -276,6 +326,35 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
           <circle cx={CX} cy={CY} r={37} fill="#00a2ff" />
           <circle cx={CX} cy={CY} r={7} fill="#ff2bd6" stroke="#fff" strokeWidth="2" />
+
+          {/* User-locked ray before week 1 */}
+          <Ray ang={RAY_BEFORE_W1} color="#00ffff" width={3} />
+          <circle cx={CX} cy={CY} r={10} fill="#00ffff" stroke="#000" strokeWidth={2} />
+        </svg>
+
+        {/* Digit markers: always visible (even with Drawing OFF) */}
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          viewBox={`0 0 ${IMG_W} ${IMG_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden
+        >
+          <circle
+            cx={WEEK_3.cx}
+            cy={WEEK_3.cy}
+            r={WEEK_3.r + 5}
+            fill="none"
+            stroke="#000000"
+            strokeWidth={8}
+          />
+          <circle
+            cx={WEEK_3.cx}
+            cy={WEEK_3.cy}
+            r={WEEK_3.r}
+            fill="none"
+            stroke="#00ff00"
+            strokeWidth={5}
+          />
         </svg>
       </div>
 
