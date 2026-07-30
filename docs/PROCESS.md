@@ -153,7 +153,7 @@ BATON_OUTER_END_DEPTH = 27.5 // yellow triangle depth
 BATON_12_LATERAL     = 30    // left/right offset for the double 12 markers
 ```
 
-### Facet colors (semi-transparent for alignment)
+### Flat calibration mode
 
 | Facet | Color | Topology |
 | --- | --- | --- |
@@ -161,6 +161,22 @@ BATON_12_LATERAL     = 30    // left/right offset for the double 12 markers
 | Red | `#ff3333` | Left long face of the prism |
 | Blue | `#3388ff` | Right long face of the prism |
 | Green | `#33ff66` | Single 4-vertex diamond (two mirrored triangles) forming the inner arrow tip |
+
+The flat layer preserves these semi-transparent diagnostic colors for geometry calibration.
+
+### Physically lit 3D mode
+
+The 3D layer uses the same projected polygons but assigns explicit 3D vertices to the hidden base, raised ridge, outer bevel, and pointed inner bevel. Face normals are derived with cross products rather than guessed from marker position.
+
+A draggable point light sits on a hemisphere with radius `6 × R_DIAL_EDGE`:
+
+```text
+light x = CX + u × radius
+light y = CY + v × radius
+light z = sqrt(1 - u² - v²) × radius
+```
+
+Each opaque metallic facet combines ambient light, Lambertian diffuse response, inverse-distance attenuation, and a Blinn–Phong specular term. Normals and facet centers rotate with each marker, so the same light position produces different shading around the dial.
 
 ### Placement rules
 
@@ -185,7 +201,7 @@ function hourAngleDeg(h: number) {
 
 ## 8. UI controls
 
-Controls live in two rows under the dial.
+Controls live in three rows under the dial.
 
 Row 1:
 
@@ -208,9 +224,13 @@ Row 2 contains independent `ON/OFF` controls for:
 - **Minute**
 - **Second**
 
+Row 3 contains **Markers: Flat / 3D**, **⚙️**, **Week +1**, and **Day +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets, while 3D shows the opaque physically lit prisms. The persistent **⚙️** button shows or hides every other interface control; controls are hidden by default. The calendar controls advance their hand by one sector, store the result as a manual angle override, and select that hand so **Live** can return it to the current calendar position. Calendar advances use a 650ms ease-out transform and retain unwrapped angles so crossing 360° continues clockwise.
+
 All controls are client state inside `WeeklyCalendarWatch`.
 
 A fixed hand selector and vertical `0–360°` slider can manually override any hand angle. **Live** clears the selected hand override. **Pause** freezes live clock/calendar state; **Continue** clears manual overrides and resumes from the current time.
+
+In 3D marker mode, the left-side light panel can be dragged by its header. Its hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. Position and brightness update all marker facet colors immediately.
 
 ---
 
@@ -401,7 +421,7 @@ Everything geometric lives in one file so the constants stay co-located with the
 3. **Uniform 53-week grid beat measured individual angles.** User explicitly reverted a “measured” version.
 4. **Minute markers and hour batons share the same angular grid.** That is why the baton angle function is derived from the minute `k` index.
 5. **3 o’clock is special** — both the baton and its two neighboring minute dots are absent because of the date window.
-6. **Semi-transparent colored facets were essential** for matching the 3-D shading of the real applied indices. Opaque solid shapes hide alignment errors.
+6. **Keep flat and 3D marker purposes separate.** Semi-transparent colors are useful for geometry calibration; the lighting simulator must use opaque metallic facets.
 7. **Layer controls are the primary debugging interface.** Keep photo, drawing, guides, and every hand independently toggleable.
 8. **Do not approximate curved hammer heads with rectangles.** Both red calendar heads follow concentric dial rails.
 9. **Measure gradients from source pixels.** The week shaft’s dark-to-gray change is localized, not a full-length linear ramp.

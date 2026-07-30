@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Orthographic reference with track circles + sector lines + hour batons.
@@ -697,7 +697,111 @@ function isoWeekNumber(date: Date) {
   return Math.ceil(((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
-function HourBaton({
+type Vec3 = { x: number; y: number; z: number };
+type LightDiskPosition = { u: number; v: number };
+type MarkerMode = "flat" | "3d";
+
+const MARKER_PRISM_HEIGHT = 34;
+const LIGHT_HEMISPHERE_RADIUS = R_DIAL_EDGE * 6;
+
+function subtract3(a: Vec3, b: Vec3): Vec3 {
+  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+}
+
+function cross3(a: Vec3, b: Vec3): Vec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function dot3(a: Vec3, b: Vec3) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function normalize3(vector: Vec3): Vec3 {
+  const length = Math.hypot(vector.x, vector.y, vector.z) || 1;
+  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+}
+
+function faceNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 {
+  const normal = normalize3(cross3(subtract3(b, a), subtract3(c, a)));
+  return normal.z < 0 ? { x: -normal.x, y: -normal.y, z: -normal.z } : normal;
+}
+
+function average3(vectors: Vec3[]): Vec3 {
+  return normalize3(
+    vectors.reduce(
+      (sum, vector) => ({
+        x: sum.x + vector.x,
+        y: sum.y + vector.y,
+        z: sum.z + vector.z,
+      }),
+      { x: 0, y: 0, z: 0 },
+    ),
+  );
+}
+
+function rotateMarkerVector(vector: Vec3, angle: number): Vec3 {
+  const radians = (angle * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos,
+    z: vector.z,
+  };
+}
+
+function markerWorldPoint(point: Vec3, angle: number, lateralOffset: number): Vec3 {
+  const rotated = rotateMarkerVector({ ...point, x: point.x + lateralOffset }, angle);
+  return { x: CX + rotated.x, y: CY + rotated.y, z: rotated.z };
+}
+
+function averagePoints(points: Vec3[]): Vec3 {
+  const count = points.length;
+  return points.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x / count,
+      y: sum.y + point.y / count,
+      z: sum.z + point.z / count,
+    }),
+    { x: 0, y: 0, z: 0 },
+  );
+}
+
+function markerFacetColor(
+  localNormal: Vec3,
+  localCenter: Vec3,
+  markerAngle: number,
+  lateralOffset: number,
+  lightPosition: Vec3,
+  lightBrightness: number,
+) {
+  const normal = normalize3(rotateMarkerVector(localNormal, markerAngle));
+  const center = markerWorldPoint(localCenter, markerAngle, lateralOffset);
+  const toLightVector = subtract3(lightPosition, center);
+  const distance = Math.hypot(toLightVector.x, toLightVector.y, toLightVector.z);
+  const toLight = normalize3(toLightVector);
+  const diffuse = Math.max(0, dot3(normal, toLight));
+  const attenuation = Math.min(1.6, Math.max(0.35, (LIGHT_HEMISPHERE_RADIUS / distance) ** 2));
+  const halfVector = normalize3({ x: toLight.x, y: toLight.y, z: toLight.z + 1 });
+  const specular =
+    Math.pow(Math.max(0, dot3(normal, halfVector)), 38) *
+    125 *
+    attenuation *
+    lightBrightness;
+  const level = 0.3 + diffuse * 0.95 * attenuation * lightBrightness;
+  const base = [72, 74, 71];
+  const channels = base.map((channel) => Math.round(Math.min(235, channel * level + specular)));
+  return {
+    fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
+    stroke: `rgb(${Math.round(channels[0] * 0.55)} ${Math.round(channels[1] * 0.55)} ${Math.round(channels[2] * 0.55)})`,
+  };
+}
+
+function FlatHourBaton({
   degFrom12,
   lateralOffset = 0,
 }: {
@@ -754,6 +858,246 @@ function HourBaton({
   );
 }
 
+function LitHourBaton({
+  degFrom12,
+  lightBrightness,
+  lightPosition,
+  lateralOffset = 0,
+}: {
+  degFrom12: number;
+  lightBrightness: number;
+  lightPosition: Vec3;
+  lateralOffset?: number;
+}) {
+  const hw = BATON_HALF_W;
+  const outerLeft = { x: -hw, y: -R_BATON_OUT, z: 0 };
+  const outerRight = { x: hw, y: -R_BATON_OUT, z: 0 };
+  const outerRidge = {
+    x: 0,
+    y: -R_BATON_OUT + BATON_OUTER_END_DEPTH,
+    z: MARKER_PRISM_HEIGHT,
+  };
+  const innerLeft = { x: -hw, y: -R_BATON_IN, z: 0 };
+  const innerRight = { x: hw, y: -R_BATON_IN, z: 0 };
+  const innerRidge = { x: 0, y: -R_BATON_IN_APEX, z: MARKER_PRISM_HEIGHT };
+  const innerTip = { x: 0, y: -R_BATON_IN_APEX_MIRROR, z: 0 };
+
+  const faces = [
+    {
+      key: "left",
+      points: [outerLeft, outerRidge, innerRidge, innerLeft],
+      normal: faceNormal(outerLeft, outerRidge, innerRidge),
+    },
+    {
+      key: "right",
+      points: [outerRight, innerRight, innerRidge, outerRidge],
+      normal: faceNormal(outerRight, innerRight, innerRidge),
+    },
+    {
+      key: "outer",
+      points: [outerLeft, outerRight, outerRidge],
+      normal: faceNormal(outerLeft, outerRight, outerRidge),
+    },
+    {
+      key: "inner",
+      points: [innerTip, innerLeft, innerRidge, innerRight],
+      normal: average3([
+        faceNormal(innerTip, innerLeft, innerRidge),
+        faceNormal(innerTip, innerRidge, innerRight),
+      ]),
+    },
+  ];
+
+  return (
+    <g
+      data-lit-hour-marker
+      transform={`rotate(${degFrom12} ${CX} ${CY}) translate(${lateralOffset} 0)`}
+    >
+      {faces.map((face) => {
+        const color = markerFacetColor(
+          face.normal,
+          averagePoints(face.points),
+          degFrom12,
+          lateralOffset,
+          lightPosition,
+          lightBrightness,
+        );
+        const projected = face.points.map((point) => ({ x: CX + point.x, y: CY + point.y }));
+        return (
+          <path
+            key={face.key}
+            d={ptsToPath(projected)}
+            fill={color.fill}
+            stroke={color.stroke}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function HemisphereLightControl({
+  brightness,
+  position,
+  onBrightnessChange,
+  onChange,
+}: {
+  brightness: number;
+  position: LightDiskPosition;
+  onBrightnessChange: (brightness: number) => void;
+  onChange: (position: LightDiskPosition) => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const diskRef = useRef<HTMLDivElement>(null);
+  const panelDragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+  const radius = Math.hypot(position.u, position.v);
+  const elevation = (Math.asin(Math.sqrt(Math.max(0, 1 - radius * radius))) * 180) / Math.PI;
+  const azimuth = (Math.atan2(position.u, -position.v) * 180) / Math.PI;
+
+  const clampPosition = (u: number, v: number) => {
+    const distance = Math.hypot(u, v);
+    if (distance <= 1) return { u, v };
+    return { u: u / distance, v: v / distance };
+  };
+
+  const updateFromPointer = (clientX: number, clientY: number) => {
+    const bounds = diskRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    onChange(
+      clampPosition(
+        ((clientX - bounds.left) / bounds.width) * 2 - 1,
+        ((clientY - bounds.top) / bounds.height) * 2 - 1,
+      ),
+    );
+  };
+
+  const movePanel = (clientX: number, clientY: number) => {
+    const drag = panelDragRef.current;
+    const bounds = panelRef.current?.getBoundingClientRect();
+    if (!drag || !bounds) return;
+    const requestedX = clientX - drag.x;
+    const requestedY = clientY - drag.y;
+    const deltaX = Math.min(window.innerWidth - bounds.right, Math.max(-bounds.left, requestedX));
+    const deltaY = Math.min(window.innerHeight - bounds.bottom, Math.max(-bounds.top, requestedY));
+    setPanelOffset((offset) => ({ x: offset.x + deltaX, y: offset.y + deltaY }));
+    panelDragRef.current = { ...drag, x: clientX, y: clientY };
+  };
+
+  return (
+    <div
+      ref={panelRef}
+      className="fixed left-3 top-1/2 z-30 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
+      style={{
+        transform: `translate(${panelOffset.x}px, calc(-50% + ${panelOffset.y}px))`,
+      }}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Drag marker light panel"
+        className="mb-2 touch-none select-none text-center text-xs font-semibold text-black cursor-move"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          panelDragRef.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+          };
+        }}
+        onPointerMove={(event) => {
+          if (panelDragRef.current?.pointerId === event.pointerId) {
+            movePanel(event.clientX, event.clientY);
+          }
+        }}
+        onPointerUp={(event) => {
+          if (panelDragRef.current?.pointerId === event.pointerId) {
+            panelDragRef.current = null;
+          }
+        }}
+        onPointerCancel={() => {
+          panelDragRef.current = null;
+        }}
+        onKeyDown={(event) => {
+          const movement: Record<string, [number, number]> = {
+            ArrowLeft: [-10, 0],
+            ArrowRight: [10, 0],
+            ArrowUp: [0, -10],
+            ArrowDown: [0, 10],
+          };
+          const delta = movement[event.key];
+          if (!delta) return;
+          event.preventDefault();
+          setPanelOffset((offset) => ({ x: offset.x + delta[0], y: offset.y + delta[1] }));
+        }}
+      >
+        Marker light
+      </div>
+      <div
+        ref={diskRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Hour marker light position"
+        aria-valuemin={0}
+        aria-valuemax={90}
+        aria-valuenow={Math.round(elevation)}
+        aria-valuetext={`${Math.round(azimuth)} degrees azimuth, ${Math.round(elevation)} degrees elevation`}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          updateFromPointer(event.clientX, event.clientY);
+        }}
+        onPointerMove={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            updateFromPointer(event.clientX, event.clientY);
+          }
+        }}
+        onKeyDown={(event) => {
+          const step = event.shiftKey ? 0.02 : 0.06;
+          const movement: Record<string, [number, number]> = {
+            ArrowLeft: [-step, 0],
+            ArrowRight: [step, 0],
+            ArrowUp: [0, -step],
+            ArrowDown: [0, step],
+          };
+          const delta = movement[event.key];
+          if (!delta) return;
+          event.preventDefault();
+          onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
+        }}
+        className="relative h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black"
+      >
+        <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" />
+        <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" />
+        <div
+          className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md"
+          style={{ left: `${(position.u + 1) * 50}%`, top: `${(position.v + 1) * 50}%` }}
+        />
+      </div>
+      <div className="mt-2 text-center text-[10px] tabular-nums text-black">
+        {Math.round(azimuth)}° / {Math.round(elevation)}°
+      </div>
+      <label className="mt-2 block text-[10px] font-semibold text-black">
+        <span className="flex items-center justify-between gap-2">
+          <span>Brightness</span>
+          <output className="tabular-nums">{Math.round(brightness * 100)}%</output>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={200}
+          step={1}
+          value={brightness * 100}
+          onChange={(event) => onBrightnessChange(Number(event.target.value) / 100)}
+          className="mt-1 w-full cursor-pointer accent-black"
+          aria-label="Marker light brightness"
+        />
+      </label>
+    </div>
+  );
+}
+
 function WeekIndicatorHand({ rotation }: { rotation: number }) {
   const headCenter = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, 0);
   const shaft = [
@@ -772,8 +1116,12 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
   return (
     <g
       data-week-indicator-hand
-      transform={`rotate(${rotation} ${CX} ${CY})`}
-      opacity={1}
+      style={{
+        transform: `rotate(${rotation}deg)`,
+        transformOrigin: `${CX}px ${CY}px`,
+        transition: "transform 650ms cubic-bezier(0.22, 1, 0.36, 1)",
+        willChange: "transform",
+      }}
     >
       <defs>
         <linearGradient
@@ -835,7 +1183,15 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
   );
 
   return (
-    <g data-day-indicator-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
+    <g
+      data-day-indicator-hand
+      style={{
+        transform: `rotate(${rotation}deg)`,
+        transformOrigin: `${CX}px ${CY}px`,
+        transition: "transform 650ms cubic-bezier(0.22, 1, 0.36, 1)",
+        willChange: "transform",
+      }}
+    >
       <defs>
         <linearGradient
           id="day-hand-shaft-gradient"
@@ -887,7 +1243,7 @@ function HourHand({ rotation }: { rotation: number }) {
   const darkBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH);
 
   return (
-    <g data-hour-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
+    <g data-hour-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
       <defs>
         <linearGradient id="hour-light-facet" x1="100%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stopColor="#777874" />
@@ -940,7 +1296,7 @@ function MinuteHand({ rotation }: { rotation: number }) {
   const lowerBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, MINUTE_HAND_HALF_WIDTH);
 
   return (
-    <g data-minute-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
+    <g data-minute-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
       <defs>
         <linearGradient id="minute-upper-facet" x1="0%" y1="100%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#757672" />
@@ -1002,7 +1358,7 @@ function SecondsHand({ rotation }: { rotation: number }) {
   ];
 
   return (
-    <g data-seconds-hand transform={`rotate(${rotation} ${CX} ${CY})`} opacity={0.92}>
+    <g data-seconds-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
       <defs>
         <linearGradient id="seconds-tail-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#62635f" />
@@ -1068,6 +1424,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [textVisible, setTextVisible] = useState(false);
   const [guidesVisible, setGuidesVisible] = useState(false);
   const [handsVisible, setHandsVisible] = useState(true);
+  const [markerMode, setMarkerMode] = useState<MarkerMode>("3d");
+  const [uiVisible, setUiVisible] = useState(false);
+  const [lightDiskPosition, setLightDiskPosition] = useState<LightDiskPosition>({
+    u: -0.4466,
+    v: -0.6621,
+  });
+  const [markerLightBrightness, setMarkerLightBrightness] = useState(1.92);
   const [weekHandVisible, setWeekHandVisible] = useState(true);
   const [dayHandVisible, setDayHandVisible] = useState(true);
   const [hourHandVisible, setHourHandVisible] = useState(true);
@@ -1120,14 +1483,24 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     second: secondsHandRotation,
   };
   const effectiveHandAngle = (hand: HandKey) => manualHandAngles[hand] ?? liveHandAngles[hand];
+  const selectedManualAngle = manualHandAngles[selectedHand];
   const selectedHandAngle =
-    manualHandAngles[selectedHand] ??
-    ((liveHandAngles[selectedHand] % 360) + 360) % 360;
+    selectedManualAngle !== undefined && selectedManualAngle >= 0 && selectedManualAngle <= 360
+      ? selectedManualAngle
+      : ((effectiveHandAngle(selectedHand) % 360) + 360) % 360;
   const weekHandRotation = effectiveHandAngle("week") - WEEK_HAND_ANGLE_DEG;
   const dayHandRotation = effectiveHandAngle("day") - DAY_HAND_ANGLE_DEG;
   const hourHandRotation = effectiveHandAngle("hour") - HOUR_HAND_ANGLE_DEG;
   const minuteHandRotation = effectiveHandAngle("minute") - MINUTE_HAND_ANGLE_DEG;
   const displayedSecondsHandRotation = effectiveHandAngle("second");
+  const lightHeight = Math.sqrt(
+    Math.max(0, 1 - lightDiskPosition.u ** 2 - lightDiskPosition.v ** 2),
+  );
+  const markerLightPosition: Vec3 = {
+    x: CX + lightDiskPosition.u * LIGHT_HEMISPHERE_RADIUS,
+    y: CY + lightDiskPosition.v * LIGHT_HEMISPHERE_RADIUS,
+    z: lightHeight * LIGHT_HEMISPHERE_RADIUS,
+  };
 
   const referenceImage = REFERENCE_IMAGES[referenceIdx];
   const photoOpacity = PHOTO_OPACITY[opacityIdx];
@@ -1178,9 +1551,29 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     setTimeRunning(true);
   };
 
+  const advanceCalendarHand = (hand: "week" | "day", step: number) => {
+    setManualHandAngles((angles) => ({
+      ...angles,
+      [hand]: (angles[hand] ?? liveHandAngles[hand]) + step,
+    }));
+    setSelectedHand(hand);
+  };
+
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
-      <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
+      <button
+        type="button"
+        aria-pressed={uiVisible}
+        aria-label="Toggle interface controls"
+        title="Interface controls"
+        onClick={() => setUiVisible((visible) => !visible)}
+        className="fixed left-3 top-3 z-40 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+      >
+        ⚙️
+      </button>
+
+      {uiVisible && (
+        <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
         <label htmlFor="hand-selector" className="pl-2 text-sm font-semibold text-black">
           Hand
         </label>
@@ -1215,9 +1608,11 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         >
           Live
         </button>
-      </div>
+        </div>
+      )}
 
-      <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
+      {uiVisible && (
+        <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
         <span className="text-xs font-semibold tabular-nums text-black">0°</span>
         <input
           type="range"
@@ -1234,7 +1629,17 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           style={{ writingMode: "vertical-lr" }}
         />
         <span className="text-xs font-semibold tabular-nums text-black">360°</span>
-      </div>
+        </div>
+      )}
+
+      {uiVisible && (
+        <HemisphereLightControl
+          brightness={markerLightBrightness}
+          position={lightDiskPosition}
+          onBrightnessChange={setMarkerLightBrightness}
+          onChange={setLightDiskPosition}
+        />
+      )}
 
       <div className="relative w-full">
         <img
@@ -1316,12 +1721,38 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             />
           ))}
 
-          {SINGLE_BATON_HOURS.map((h) => (
-            <HourBaton key={h} degFrom12={hourAngleDeg(h)} />
-          ))}
-
-          <HourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
-          <HourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
+          {markerMode === "flat" ? (
+            <>
+              {SINGLE_BATON_HOURS.map((h) => (
+                <FlatHourBaton key={h} degFrom12={hourAngleDeg(h)} />
+              ))}
+              <FlatHourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
+              <FlatHourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
+            </>
+          ) : (
+            <>
+              {SINGLE_BATON_HOURS.map((h) => (
+                <LitHourBaton
+                  key={h}
+                  degFrom12={hourAngleDeg(h)}
+                  lightBrightness={markerLightBrightness}
+                  lightPosition={markerLightPosition}
+                />
+              ))}
+              <LitHourBaton
+                degFrom12={0}
+                lateralOffset={-BATON_12_LATERAL}
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+              />
+              <LitHourBaton
+                degFrom12={0}
+                lateralOffset={BATON_12_LATERAL}
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+              />
+            </>
+          )}
           </g>
 
           <g
@@ -1454,7 +1885,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        <div className="flex flex-wrap items-center justify-center gap-1.5">
+        {uiVisible && (
+          <>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
           <button
           type="button"
           onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
@@ -1498,8 +1931,8 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         >
           {handsVisible ? "Hands: ON" : "Hands: OFF"}
         </button>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
           <button
           type="button"
           aria-pressed={weekHandVisible}
@@ -1540,7 +1973,37 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         >
           {secondsHandVisible ? "Second: ON" : "Second: OFF"}
         </button>
-        </div>
+          </div>
+          </>
+        )}
+        {uiVisible && (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              aria-pressed={markerMode === "3d"}
+              onClick={() => setMarkerMode((mode) => (mode === "flat" ? "3d" : "flat"))}
+              className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+            >
+              {markerMode === "3d" ? "Markers: 3D" : "Markers: Flat"}
+            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => advanceCalendarHand("week", WEEK_STEP_DEG)}
+                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                Week +1
+              </button>
+              <button
+                type="button"
+                onClick={() => advanceCalendarHand("day", DAY_SECTOR_STEP_DEG)}
+                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                Day +1
+              </button>
+            </>
+          </div>
+        )}
       </div>
     </div>
   );

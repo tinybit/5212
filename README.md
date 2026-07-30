@@ -46,16 +46,17 @@ npx eslint src/components/WeeklyCalendarWatch.tsx
 
 ## Controls
 
-The dial controls are arranged in two rows:
+The dial controls are arranged in three rows:
 
 1. `Photo`, `Reference`, `Drawing`, `Text`, `Guides`, `Hands`
 2. `Week`, `Day`, `Hour`, `Minute`, `Second`
+3. `Markers: Flat / 3D`, `⚙️`, `Week +1`, `Day +1`
 
-`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer.
+`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer. The third row switches between the original flat calibration markers and opaque, physically lit 3D markers, and advances the calendar hands for manual adjustment.
 
-The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, and Hands ON.
+The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and interface controls hidden. The persistent `⚙️` button shows or hides all controls.
 
-The fixed controls above and beside the dial select any hand, rotate it through 360°, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle.
+The fixed controls above and beside the dial select any hand, rotate it through 360°, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle. In 3D marker mode, the movable left-side panel positions a point light on a hemisphere and controls its brightness; changes update diffuse and metallic specular shading independently on every marker facet.
 
 ## Key files
 
