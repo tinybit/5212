@@ -32,6 +32,18 @@ const BATON_HALF_W = 24;
 const BATON_OUTER_END_DEPTH = 27.5;
 const BATON_12_LATERAL = 30;
 
+/** Seconds-hand geometry measured from the orthographic reference. */
+const SECOND_HAND_TIP_Y = 536;
+const SECOND_HAND_NECK_Y = 1287;
+const SECOND_HAND_TIP_HALF_W = 4.752;
+const SECOND_HAND_NECK_HALF_W = 7.776;
+const SECOND_HAND_HUB_RADIUS = 41.36;
+const SECOND_HAND_TAIL_SHOULDER_Y = 1358;
+const SECOND_HAND_TAIL_END_Y = 1618;
+const SECOND_HAND_TAIL_POINT_Y = 1643;
+const SECOND_HAND_TAIL_SHOULDER_HALF_W = 13.5;
+const SECOND_HAND_TAIL_END_HALF_W = 27;
+
 const SINGLE_BATON_HOURS = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 
 const MINUTE_SKIP = new Set<number>([
@@ -656,6 +668,81 @@ function HourBaton({
   );
 }
 
+function SecondsHand() {
+  const upperBlade = [
+    { x: CX - SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
+    { x: CX + SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
+    { x: CX + SECOND_HAND_NECK_HALF_W, y: SECOND_HAND_NECK_Y },
+    { x: CX - SECOND_HAND_NECK_HALF_W, y: SECOND_HAND_NECK_Y },
+  ];
+  const counterweight = [
+    { x: CX - SECOND_HAND_TAIL_SHOULDER_HALF_W, y: SECOND_HAND_TAIL_SHOULDER_Y },
+    { x: CX + SECOND_HAND_TAIL_SHOULDER_HALF_W, y: SECOND_HAND_TAIL_SHOULDER_Y },
+    { x: CX + SECOND_HAND_TAIL_END_HALF_W, y: SECOND_HAND_TAIL_END_Y },
+    { x: CX, y: SECOND_HAND_TAIL_POINT_Y },
+    { x: CX - SECOND_HAND_TAIL_END_HALF_W, y: SECOND_HAND_TAIL_END_Y },
+  ];
+
+  return (
+    <g opacity={0.92}>
+      <defs>
+        <linearGradient id="seconds-tail-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#62635f" />
+          <stop offset="48%" stopColor="#383936" />
+          <stop offset="100%" stopColor="#090a09" />
+        </linearGradient>
+        <radialGradient id="seconds-hub-gradient" cx="42%" cy="35%" r="70%">
+          <stop offset="0%" stopColor="#a6a7a3" />
+          <stop offset="58%" stopColor="#777874" />
+          <stop offset="100%" stopColor="#575854" />
+        </radialGradient>
+        <radialGradient id="seconds-pin-gradient" cx="38%" cy="30%" r="72%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="28%" stopColor="#d7d8d5" />
+          <stop offset="62%" stopColor="#777975" />
+          <stop offset="100%" stopColor="#242522" />
+        </radialGradient>
+        <filter id="seconds-hand-shadow" x="-30%" y="-10%" width="170%" height="130%">
+          <feDropShadow dx="5" dy="5" stdDeviation="4" floodColor="#000000" floodOpacity="0.24" />
+        </filter>
+      </defs>
+
+      <g filter="url(#seconds-hand-shadow)">
+        <path
+          d={ptsToPath(counterweight)}
+          fill="url(#seconds-tail-gradient)"
+          stroke="#555651"
+          strokeWidth={1.5}
+        />
+        <path
+          d={ptsToPath(upperBlade)}
+          fill="#858681"
+          stroke="#666762"
+          strokeWidth={1.728}
+        />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={SECOND_HAND_HUB_RADIUS}
+          fill="url(#seconds-hub-gradient)"
+          stroke="#565753"
+          strokeWidth={4}
+        />
+        <circle cx={CX} cy={CY} r={15} fill="#343532" />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={10}
+          fill="url(#seconds-pin-gradient)"
+          stroke="#20211f"
+          strokeWidth={2}
+        />
+        <circle cx={CX - 3} cy={CY - 4} r={3.5} fill="#ffffff" opacity={0.82} />
+      </g>
+    </g>
+  );
+}
+
 export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
   const [drawVisible, setDrawVisible] = useState(true);
@@ -828,6 +915,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
 
           <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
+          <SecondsHand />
         </svg>
 
         {/* Calibrated center guides for every week digit, month letter, and day letter. */}
