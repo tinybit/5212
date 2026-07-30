@@ -4,6 +4,11 @@ Pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Weekly
 
 The app overlays a programmatic React/SVG dial on a 2911×2683 orthographic reference photograph. The photo, drawing, guides, and individual hands can be toggled independently for alignment work. The long-term target is a clean dial bitmap plus rotatable hand assets for a Garmin Fenix 7/8 watch face.
 
+<p align="center">
+  <img src="docs/screenshots/watch-display.png" alt="Weekly calendar watch simulator" width="48%">
+  <img src="docs/screenshots/watch-controls.png" alt="Watch simulator lighting and calibration controls" width="48%">
+</p>
+
 ## Current state
 
 Implemented and calibrated:
