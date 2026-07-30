@@ -113,6 +113,22 @@ export const POLISHED_BLACK_PVD: PolishedMetalMaterial = {
   facingReflectionStrength: 0.3,
 };
 
+export type GlossyPaintMaterial = {
+  baseColor: readonly [number, number, number];
+  ambientStrength: number;
+  diffuseStrength: number;
+  specularStrength: number;
+  highlightExponent: number;
+};
+
+export const GLOSSY_RED_PAINT: GlossyPaintMaterial = {
+  baseColor: [155, 18, 30],
+  ambientStrength: 0.55,
+  diffuseStrength: 0.55,
+  specularStrength: 0.18,
+  highlightExponent: 26,
+};
+
 export function shadeMetalFacet(
   normal: Vec3,
   center: Vec3,
@@ -148,6 +164,34 @@ export function shadeMetalFacet(
   return {
     fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
     stroke: `rgb(${Math.round(channels[0] * material.strokeScale)} ${Math.round(channels[1] * material.strokeScale)} ${Math.round(channels[2] * material.strokeScale)})`,
+  };
+}
+
+export function shadeGlossyPaintFacet(
+  normal: Vec3,
+  center: Vec3,
+  lightPosition: Vec3,
+  lightBrightness: number,
+  material: GlossyPaintMaterial = GLOSSY_RED_PAINT,
+) {
+  const toLight = normalize3(subtract3(lightPosition, center));
+  const lightVisibility = Math.max(0, dot3(normal, toLight));
+  const halfVector = normalize3({ x: toLight.x, y: toLight.y, z: toLight.z + 1 });
+  const brightness = Math.max(0, lightBrightness);
+  const pigmentLevel =
+    material.ambientStrength + material.diffuseStrength * lightVisibility * brightness;
+  const specular =
+    Math.pow(Math.max(0, dot3(normal, halfVector)), material.highlightExponent) *
+    material.specularStrength *
+    brightness *
+    lightVisibility;
+  const channels = material.baseColor.map((channel) =>
+    linearToSrgb(toneMap(srgbToLinear(channel) * pigmentLevel + specular)),
+  );
+
+  return {
+    fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
+    stroke: `rgb(${Math.round(channels[0] * 0.46)} ${Math.round(channels[1] * 0.46)} ${Math.round(channels[2] * 0.46)})`,
   };
 }
 

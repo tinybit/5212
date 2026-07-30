@@ -9,6 +9,7 @@ import {
   planeHeightAt,
   POLISHED_BLACK_PVD,
   rotateVector,
+  shadeGlossyPaintFacet,
   shadeMetalFacet,
   type DateWindowLightSettings,
   type LightDiskPosition,
@@ -1405,6 +1406,126 @@ function HemisphereLightControl({
   );
 }
 
+function LitAnnularPaintCapsule({
+  baseAngle,
+  halfLength,
+  halfThickness,
+  lightBrightness,
+  lightPosition,
+  radius,
+  rotation,
+}: {
+  baseAngle: number;
+  halfLength: number;
+  halfThickness: number;
+  lightBrightness: number;
+  lightPosition: Vec3;
+  radius: number;
+  rotation: number;
+}) {
+  const alongSegments = 32;
+  const crossSegments = 10;
+  const paintHeight = halfThickness * 0.55;
+  const endRoundingLength = halfThickness * 0.55;
+
+  const surfacePoint = (alongIndex: number, crossIndex: number) => {
+    const alongT = alongIndex / alongSegments;
+    const crossT = (crossIndex / crossSegments) * 2 - 1;
+    const along = -halfLength + alongT * halfLength * 2;
+    const across = crossT * halfThickness;
+    const crossProfile = Math.sqrt(
+      Math.max(0, 1 - (across / halfThickness) ** 2),
+    );
+    const distanceFromEnd = halfLength - Math.abs(along);
+    const endProgress = Math.min(1, Math.max(0, distanceFromEnd / endRoundingLength));
+    const endProfile = Math.sqrt(Math.max(0, 1 - (1 - endProgress) ** 2));
+    const height = paintHeight * crossProfile * endProfile;
+    const localAngle = baseAngle + (along / radius) * (180 / Math.PI);
+    const worldAngle = localAngle + rotation;
+    const localPoint = polarPoint(localAngle, radius + across);
+    const worldPoint2d = polarPoint(worldAngle, radius + across);
+    const worldRadians = (worldAngle * Math.PI) / 180;
+    const tangent = { x: Math.cos(worldRadians), y: Math.sin(worldRadians) };
+    const radial = { x: Math.sin(worldRadians), y: -Math.cos(worldRadians) };
+    const crossDerivative =
+      (-paintHeight * endProfile * across) /
+      (halfThickness ** 2 * Math.max(0.0001, crossProfile));
+    const endDerivative =
+      endProgress < 1
+        ? (paintHeight *
+            crossProfile *
+            (1 - endProgress) *
+            (along < 0 ? 1 : -1)) /
+          (endRoundingLength * Math.max(0.0001, endProfile))
+        : 0;
+    const tangentScale = (radius + across) / radius;
+    const normal = normalize3({
+      x:
+        tangent.x * (-endDerivative / tangentScale) +
+        radial.x * -crossDerivative,
+      y:
+        tangent.y * (-endDerivative / tangentScale) +
+        radial.y * -crossDerivative,
+      z: 1,
+    });
+
+    return {
+      localPoint,
+      worldPoint: { ...worldPoint2d, z: height },
+      normal,
+    };
+  };
+
+  const facets = Array.from({ length: alongSegments }, (_, alongIndex) =>
+    Array.from({ length: crossSegments }, (__, crossIndex) => {
+      const corners = [
+        surfacePoint(alongIndex, crossIndex),
+        surfacePoint(alongIndex, crossIndex + 1),
+        surfacePoint(alongIndex + 1, crossIndex + 1),
+        surfacePoint(alongIndex + 1, crossIndex),
+      ];
+      const normal = normalize3(
+        corners.reduce(
+          (sum, corner) => ({
+            x: sum.x + corner.normal.x / corners.length,
+            y: sum.y + corner.normal.y / corners.length,
+            z: sum.z + corner.normal.z / corners.length,
+          }),
+          { x: 0, y: 0, z: 0 },
+        ),
+      );
+      const center = averagePoints(corners.map((corner) => corner.worldPoint));
+      const color = shadeGlossyPaintFacet(
+        normal,
+        center,
+        lightPosition,
+        lightBrightness,
+      );
+
+      return {
+        key: `${alongIndex}-${crossIndex}`,
+        path: ptsToPath(corners.map((corner) => corner.localPoint)),
+        color,
+      };
+    }),
+  ).flat();
+
+  return (
+    <g data-paint-rendering="annular-half-cylinder">
+      {facets.map((facet) => (
+        <path
+          key={facet.key}
+          d={facet.path}
+          fill={facet.color.fill}
+          stroke={facet.color.fill}
+          strokeWidth={0.7}
+          strokeLinejoin="round"
+        />
+      ))}
+    </g>
+  );
+}
+
 function WeekIndicatorHand({
   lightBrightness,
   lightPosition,
@@ -1503,13 +1624,25 @@ function WeekIndicatorHand({
           stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#171815"}
           strokeWidth={1.44}
         />
-        <path
-          d={headPath}
-          fill="url(#week-hand-head-gradient)"
-          stroke="#8f1d28"
-          strokeWidth={1.3}
-          strokeLinejoin="round"
-        />
+        {dynamicallyLit ? (
+          <LitAnnularPaintCapsule
+            baseAngle={WEEK_HAND_ANGLE_DEG}
+            halfLength={WEEK_HAND_HEAD_HALF_LENGTH}
+            halfThickness={WEEK_HAND_HEAD_HALF_THICKNESS}
+            lightBrightness={lightBrightness}
+            lightPosition={lightPosition}
+            radius={WEEK_HAND_HEAD_RADIUS}
+            rotation={rotation}
+          />
+        ) : (
+          <path
+            d={headPath}
+            fill="url(#week-hand-head-gradient)"
+            stroke="#8f1d28"
+            strokeWidth={1.3}
+            strokeLinejoin="round"
+          />
+        )}
       </g>
     </g>
   );
@@ -1611,13 +1744,25 @@ function DayIndicatorHand({
           stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#363633"}
           strokeWidth={1.4}
         />
-        <path
-          d={headPath}
-          fill="url(#day-hand-head-gradient)"
-          stroke="#8e2530"
-          strokeWidth={1.3}
-          strokeLinejoin="round"
-        />
+        {dynamicallyLit ? (
+          <LitAnnularPaintCapsule
+            baseAngle={DAY_HAND_ANGLE_DEG}
+            halfLength={DAY_HAND_HEAD_HALF_LENGTH}
+            halfThickness={DAY_HAND_HEAD_HALF_THICKNESS}
+            lightBrightness={lightBrightness}
+            lightPosition={lightPosition}
+            radius={DAY_HAND_HEAD_RADIUS}
+            rotation={rotation}
+          />
+        ) : (
+          <path
+            d={headPath}
+            fill="url(#day-hand-head-gradient)"
+            stroke="#8e2530"
+            strokeWidth={1.3}
+            strokeLinejoin="round"
+          />
+        )}
       </g>
     </g>
   );

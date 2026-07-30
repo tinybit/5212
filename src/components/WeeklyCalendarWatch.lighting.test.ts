@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   dateWindowLightModel,
   faceNormal,
+  GLOSSY_RED_PAINT,
   planeHeightAt,
   POLISHED_BLACK_PVD,
+  shadeGlossyPaintFacet,
   shadeMetalFacet,
   type DateWindowLightSettings,
   type Vec3,
@@ -122,5 +124,28 @@ describe("facet lighting", () => {
 
     expect(redChannel(zenith.fill)).toBeLessThan(40);
     expect(redChannel(aligned.fill)).toBeGreaterThan(180);
+  });
+
+  it("keeps lit glossy paint red while adding a dielectric highlight", () => {
+    const unlit = shadeGlossyPaintFacet(
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 1000 },
+      0,
+      GLOSSY_RED_PAINT,
+    );
+    const lit = shadeGlossyPaintFacet(
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 1000 },
+      1.92,
+      GLOSSY_RED_PAINT,
+    );
+    const channels = (fill: string) => [...fill.matchAll(/\d+/g)].map(Number);
+    const [unlitRed] = channels(unlit.fill);
+    const [litRed, litGreen] = channels(lit.fill);
+
+    expect(litRed).toBeGreaterThan(unlitRed);
+    expect(litRed).toBeGreaterThan(litGreen);
   });
 });
