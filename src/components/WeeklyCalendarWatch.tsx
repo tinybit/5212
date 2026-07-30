@@ -38,8 +38,8 @@ const BATON_12_LATERAL = 30;
 /** Seconds-hand geometry measured from the orthographic reference. */
 const SECOND_HAND_TIP_Y = 536;
 const SECOND_HAND_NECK_Y = 1287;
-const SECOND_HAND_TIP_HALF_W = 4.752;
-const SECOND_HAND_NECK_HALF_W = 7.776;
+const SECOND_HAND_TIP_HALF_W = 3.84912;
+const SECOND_HAND_NECK_HALF_W = 6.29856;
 const SECOND_HAND_HUB_RADIUS = 41.36;
 const SECOND_HAND_TAIL_SHOULDER_Y = 1358;
 const SECOND_HAND_TAIL_END_Y = 1618;
@@ -59,10 +59,11 @@ const MINUTE_HAND_HALF_WIDTH = 60;
 
 /** Hour-hand geometry measured from the reference and traced silhouette. */
 const HOUR_HAND_ANGLE_DEG = -55.2;
-const HOUR_HAND_TIP_RADIUS = 480;
+const HOUR_HAND_TIP_RADIUS = 510;
 const HOUR_HAND_REAR_RADIUS = -125;
 const HOUR_HAND_BASE_RADIUS = -15;
 const HOUR_HAND_HALF_WIDTH = 72;
+const HOUR_HAND_TIP_HALF_WIDTH = 3;
 
 /** Week/month hammer-hand geometry measured from the reference. */
 const WEEK_HAND_REFERENCE_WEEK = 33;
@@ -445,10 +446,24 @@ const R_DAY_GLYPH_GUIDE = averageDayGlyphRadius();
 
 const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
+const REFERENCE_IMAGES = [
+  { src: "/reference-ortho-cream.jpg", label: "Reference: 1" },
+  { src: "/reference-handless.png", label: "Reference: 2" },
+] as const;
 
 type Props = {
   className?: string;
 };
+
+type HandKey = "week" | "day" | "hour" | "minute" | "second";
+
+const HAND_OPTIONS: { value: HandKey; label: string }[] = [
+  { value: "week", label: "Week" },
+  { value: "day", label: "Day" },
+  { value: "hour", label: "Hour" },
+  { value: "minute", label: "Minute" },
+  { value: "second", label: "Second" },
+];
 
 function polarPoint(degFrom12: number, r: number) {
   const rad = ((degFrom12 - 90) * Math.PI) / 180;
@@ -866,7 +881,9 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
 function HourHand({ rotation }: { rotation: number }) {
   const rear = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_REAR_RADIUS, 0);
   const lightBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, HOUR_HAND_HALF_WIDTH);
-  const tip = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, 0);
+  const tipCenter = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, 0);
+  const lightTip = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, HOUR_HAND_TIP_HALF_WIDTH);
+  const darkTip = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_TIP_RADIUS, -HOUR_HAND_TIP_HALF_WIDTH);
   const darkBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH);
 
   return (
@@ -889,14 +906,14 @@ function HourHand({ rotation }: { rotation: number }) {
 
       <g filter="url(#hour-hand-shadow)">
         <path
-          d={ptsToPath([rear, lightBase, tip])}
+          d={ptsToPath([rear, lightBase, lightTip, tipCenter])}
           fill="url(#hour-light-facet)"
           stroke="#565753"
           strokeWidth={2}
           strokeLinejoin="round"
         />
         <path
-          d={ptsToPath([rear, tip, darkBase])}
+          d={ptsToPath([rear, tipCenter, darkTip, darkBase])}
           fill="url(#hour-dark-facet)"
           stroke="#181917"
           strokeWidth={2}
@@ -905,8 +922,8 @@ function HourHand({ rotation }: { rotation: number }) {
         <line
           x1={rear.x}
           y1={rear.y}
-          x2={tip.x}
-          y2={tip.y}
+          x2={tipCenter.x}
+          y2={tipCenter.y}
           stroke="#50514e"
           strokeWidth={2}
           opacity={0.8}
@@ -1046,16 +1063,23 @@ function SecondsHand({ rotation }: { rotation: number }) {
 
 export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
+  const [referenceIdx, setReferenceIdx] = useState(0);
   const [drawVisible, setDrawVisible] = useState(true);
   const [guidesVisible, setGuidesVisible] = useState(true);
+  const [handsVisible, setHandsVisible] = useState(true);
   const [weekHandVisible, setWeekHandVisible] = useState(true);
   const [dayHandVisible, setDayHandVisible] = useState(true);
   const [hourHandVisible, setHourHandVisible] = useState(true);
   const [minuteHandVisible, setMinuteHandVisible] = useState(true);
   const [secondsHandVisible, setSecondsHandVisible] = useState(true);
+  const [selectedHand, setSelectedHand] = useState<HandKey>("second");
+  const [manualHandAngles, setManualHandAngles] = useState<Partial<Record<HandKey, number>>>({});
   const [clockTimeMs, setClockTimeMs] = useState<number | null>(null);
+  const [timeRunning, setTimeRunning] = useState(true);
 
   useEffect(() => {
+    if (!timeRunning) return;
+
     let timerId: number;
 
     const advanceSecondsHand = () => {
@@ -1068,7 +1092,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
     advanceSecondsHand();
     return () => window.clearTimeout(timerId);
-  }, []);
+  }, [timeRunning]);
 
   const clockTime = clockTimeMs === null ? null : new Date(clockTimeMs);
   const secondsWithMilliseconds =
@@ -1083,15 +1107,28 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     clockTime === null
       ? HOUR_HAND_ANGLE_DEG
       : ((clockTime.getHours() % 12) + clockTime.getMinutes() / 60 + secondsWithMilliseconds / 3600) * 30;
-  const minuteHandRotation = minuteHandAngle - MINUTE_HAND_ANGLE_DEG;
-  const hourHandRotation = hourHandAngle - HOUR_HAND_ANGLE_DEG;
   const currentWeek = clockTime === null ? WEEK_HAND_REFERENCE_WEEK : isoWeekNumber(clockTime);
   const weekHandAngle = WEEK_OFFSET_DEG + (currentWeek - 1) * WEEK_STEP_DEG;
-  const weekHandRotation = weekHandAngle - WEEK_HAND_ANGLE_DEG;
   const currentDay = clockTime === null ? DAY_HAND_REFERENCE_DAY : clockTime.getDay();
   const dayHandAngle = DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + currentDay * DAY_SECTOR_STEP_DEG;
-  const dayHandRotation = dayHandAngle - DAY_HAND_ANGLE_DEG;
+  const liveHandAngles: Record<HandKey, number> = {
+    week: weekHandAngle,
+    day: dayHandAngle,
+    hour: hourHandAngle,
+    minute: minuteHandAngle,
+    second: secondsHandRotation,
+  };
+  const effectiveHandAngle = (hand: HandKey) => manualHandAngles[hand] ?? liveHandAngles[hand];
+  const selectedHandAngle =
+    manualHandAngles[selectedHand] ??
+    ((liveHandAngles[selectedHand] % 360) + 360) % 360;
+  const weekHandRotation = effectiveHandAngle("week") - WEEK_HAND_ANGLE_DEG;
+  const dayHandRotation = effectiveHandAngle("day") - DAY_HAND_ANGLE_DEG;
+  const hourHandRotation = effectiveHandAngle("hour") - HOUR_HAND_ANGLE_DEG;
+  const minuteHandRotation = effectiveHandAngle("minute") - MINUTE_HAND_ANGLE_DEG;
+  const displayedSecondsHandRotation = effectiveHandAngle("second");
 
+  const referenceImage = REFERENCE_IMAGES[referenceIdx];
   const photoOpacity = PHOTO_OPACITY[opacityIdx];
   const monthSectors = monthSectorLines();
   const daySectors = daySectorLines();
@@ -1119,12 +1156,89 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   ];
   const mDots = minuteDots();
 
+  const toggleTimeRunning = () => {
+    if (timeRunning) {
+      setTimeRunning(false);
+      return;
+    }
+
+    setManualHandAngles({});
+    setClockTimeMs(Date.now());
+    setTimeRunning(true);
+  };
+
+  const returnSelectedHandToLive = () => {
+    setManualHandAngles((angles) => {
+      const nextAngles = { ...angles };
+      delete nextAngles[selectedHand];
+      return nextAngles;
+    });
+    setClockTimeMs(Date.now());
+    setTimeRunning(true);
+  };
+
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
+      <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
+        <label htmlFor="hand-selector" className="pl-2 text-sm font-semibold text-black">
+          Hand
+        </label>
+        <select
+          id="hand-selector"
+          value={selectedHand}
+          onChange={(event) => setSelectedHand(event.target.value as HandKey)}
+          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black"
+        >
+          {HAND_OPTIONS.map((hand) => (
+            <option key={hand.value} value={hand.value}>
+              {hand.label}
+            </option>
+          ))}
+        </select>
+        <output className="min-w-14 text-right text-sm font-semibold tabular-nums text-black">
+          {selectedHandAngle.toFixed(1)}°
+        </output>
+        <button
+          type="button"
+          aria-pressed={!timeRunning}
+          onClick={toggleTimeRunning}
+          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
+        >
+          {timeRunning ? "Pause" : "Continue"}
+        </button>
+        <button
+          type="button"
+          disabled={manualHandAngles[selectedHand] === undefined}
+          onClick={returnSelectedHandToLive}
+          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-default disabled:opacity-40"
+        >
+          Live
+        </button>
+      </div>
+
+      <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
+        <span className="text-xs font-semibold tabular-nums text-black">0°</span>
+        <input
+          type="range"
+          min={0}
+          max={360}
+          step={0.1}
+          value={selectedHandAngle}
+          aria-label={`Rotate ${selectedHand} hand`}
+          onChange={(event) => {
+            const angle = Number(event.target.value);
+            setManualHandAngles((angles) => ({ ...angles, [selectedHand]: angle }));
+          }}
+          className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
+          style={{ writingMode: "vertical-lr" }}
+        />
+        <span className="text-xs font-semibold tabular-nums text-black">360°</span>
+      </div>
+
       <div className="relative w-full">
         <img
-          src="/reference-ortho-cream.jpg"
-          alt="Orthographic weekly calendar dial reference"
+          src={referenceImage.src}
+          alt={`${referenceImage.label} weekly calendar dial`}
           className="block h-auto w-full select-none transition-opacity duration-200"
           style={{ opacity: photoOpacity }}
           draggable={false}
@@ -1134,8 +1248,11 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           viewBox={`0 0 ${IMG_W} ${IMG_H}`}
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
-          style={{ opacity: drawVisible ? 1 : 0 }}
         >
+          <g
+            className="transition-opacity duration-200"
+            style={{ opacity: drawVisible ? 1 : 0 }}
+          >
           <circle cx={CX} cy={CY} r={R_DIAL_EDGE} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
           <circle cx={CX} cy={CY} r={R_WEEK_OUT} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
           <circle cx={CX} cy={CY} r={R_WEEK_IN} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
@@ -1260,11 +1377,17 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
 
           <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
-          {dayHandVisible && <DayIndicatorHand rotation={dayHandRotation} />}
-          {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
-          {hourHandVisible && <HourHand rotation={hourHandRotation} />}
-          {minuteHandVisible && <MinuteHand rotation={minuteHandRotation} />}
-          {secondsHandVisible && <SecondsHand rotation={secondsHandRotation} />}
+          </g>
+          <g
+            className="transition-opacity duration-200"
+            style={{ opacity: handsVisible ? 1 : 0 }}
+          >
+            {dayHandVisible && <DayIndicatorHand rotation={dayHandRotation} />}
+            {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
+            {hourHandVisible && <HourHand rotation={hourHandRotation} />}
+            {minuteHandVisible && <MinuteHand rotation={minuteHandRotation} />}
+              {secondsHandVisible && <SecondsHand rotation={displayedSecondsHandRotation} />}
+          </g>
         </svg>
 
         {/* Calibrated center guides for every week digit, month letter, and day letter. */}
@@ -1330,6 +1453,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         </button>
         <button
           type="button"
+          onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {referenceImage.label}
+        </button>
+        <button
+          type="button"
           onClick={() => setDrawVisible((v) => !v)}
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
@@ -1341,6 +1471,14 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {guidesVisible ? "Guides: ON" : "Guides: OFF"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={handsVisible}
+          onClick={() => setHandsVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {handsVisible ? "Hands: ON" : "Hands: OFF"}
         </button>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">

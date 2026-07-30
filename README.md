@@ -1,70 +1,86 @@
-# 5212 — Patek Philippe Weekly Calendar Dial (Digital Reconstruction)
+# 5212 — Patek Philippe Weekly Calendar Dial
 
-Pixel-accurate digital recreation of the **Patek Philippe 5212A Weekly Calendar** dial.
+Pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Weekly Calendar Ref. 5212A-001**.
 
-Long-term goal: export a clean bitmap + programmatic hands for a **Garmin Fenix** custom watch face (Fenix 7 / 8 family, 260×260 MIP display).
+The app overlays a programmatic React/SVG dial on a 2911×2683 orthographic reference photograph. The photo, drawing, guides, and individual hands can be toggled independently for alignment work. The long-term target is a clean dial bitmap plus rotatable hand assets for a Garmin Fenix 7/8 watch face.
 
-## What this repo is
+## Current state
 
-An interactive SVG overlay tool that sits on top of a high-resolution orthographic reference photograph of the real dial. We use it to lock geometry (center, concentric rails, radial sectors, minute markers, faceted hour batons) by visual iteration against the photo.
+Implemented and calibrated:
 
-The React component (`src/components/WeeklyCalendarWatch.tsx`) draws every rail, sector, minute dot and hour baton programmatically so we can toggle the photo on/off and verify alignment at any opacity.
+- Concentric day, week, month, minute, and dial-edge geometry.
+- Month, week, and weekday sector divisions.
+- Filled week separator dots and minute markers.
+- Four-facet applied hour batons, including the double marker at 12 and the date-window omission at 3.
+- Week numerals, month names, and weekday names rendered in **Indie Flower**, with measured per-glyph centers and manual optical corrections.
+- Cream reference background and matching page background.
+- Five independently rendered hands in the correct stack:
+  1. Day-of-week hand
+  2. Week-of-year/month hand
+  3. Hour hand
+  4. Minute hand
+  5. Seconds hand
+- Local-time hour and minute positioning.
+- Mechanical seconds motion at eight steps per second, matching the 4 Hz / 28,800 semi-oscillations-per-hour caliber 26-330 S C J SE.
+- Current ISO week and local weekday indication.
 
-## Current state (July 2026)
+Not implemented yet:
 
-| Layer | Status |
-| --- | --- |
-| Concentric rails (day / week / outer edge) | Locked |
-| Month sectors | Locked |
-| Week sectors + midpoint dots | Locked |
-| Day-of-week sectors | Locked |
-| Minute markers | Locked (with skips under batons + date window) |
-| Hour batons (4-facet prism model) | Locked for 1–11 + double at 12; 3 o’clock omitted (date window) |
-| Center visualization | Pink + blue diagnostic dots |
-| Photo opacity toggle (100 % / 50 % / OFF) | Working |
-| Independent Drawing ON/OFF toggle | Working |
-| Handwritten week numbers / month names / other text | **Not started** (font approach planned) |
-| Hands (hour / minute / second / date) | Not started |
-| Garmin 260×260 export | Not started |
+- Garmin 260×260 export and asset-generation pipeline.
+- Production watch-face integration and MIP/AOD optimization.
 
-## How to run
+## Run locally
 
 ```bash
-npm run dev          # serves on 0.0.0.0:8080
+npm run dev
 ```
 
-Open the live preview. Two buttons at the bottom:
+The Vite preview is configured for `0.0.0.0:8080`.
 
-1. **Photo: 100% / 50% / OFF** — cycle the reference image opacity.
-2. **Drawing: ON / OFF** — toggle the entire SVG overlay.
+Useful verification commands:
+
+```bash
+npx tsc --noEmit
+npx eslint src/components/WeeklyCalendarWatch.tsx
+```
+
+## Controls
+
+The dial controls are arranged in two rows:
+
+1. `Photo`, `Reference`, `Drawing`, `Guides`, `Hands`
+2. `Week`, `Day`, `Hour`, `Minute`, `Second`
+
+`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. Every other control independently toggles its named SVG layer.
+The four top-level layers are independent: the reference photo, dial drawing, alignment guides, and complete hand stack. The second row controls individual hands within the hand layer.
+
+The fixed controls above and beside the dial select any hand, rotate it through 360°, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle.
 
 ## Key files
 
-| Path | Purpose |
-| --- | --- |
-| `src/components/WeeklyCalendarWatch.tsx` | All geometry constants + SVG rendering |
-| `public/reference-ortho.jpg` | Orthographic baseline photo (2911×2683) |
-| `docs/PROCESS.md` | Full process history, locked numbers, distortion notes, baton model |
-| `screenshots/` | Hundreds of alignment verification crops from the iterative session |
-| `attachments/` | Original user-supplied photos |
+- `src/components/WeeklyCalendarWatch.tsx` — geometry, measured coordinates, hand shapes, clock calculations, and SVG rendering.
+- `src/components/WatchStage.tsx` — page layout and cream background.
+- `src/routes/__root.tsx` — document shell and Google Fonts import.
+- `src/styles.css` — global styling and font variables.
+- `public/reference-ortho.jpg` — original orthographic baseline.
+- `public/reference-ortho-cream.jpg` — working reference with the exterior changed to dial cream.
+- `public/reference-handless.png` — aligned dial-only reference on the same cream canvas.
+- `docs/PROCESS.md` — measurement conventions, locked constants, rendering details, and implementation history.
 
-## Units & coordinate system
+## Coordinate system
 
-Everything is in **photo pixels** of the orthographic reference:
+All geometry uses native pixels from `reference-ortho.jpg`:
 
-- Image size: **2911 × 2683**
-- Shared geometric center: **(1381, 1331)**
-- Angles measured from 12 o’clock, clockwise, in degrees
-- Polar → Cartesian conversion: `degFrom12 - 90` then standard `cos/sin`
+- Image: **2911 × 2683**
+- Shared center: **(1381, 1331)**
+- 0°: 12 o’clock
+- Positive rotation: clockwise
+- Polar conversion: subtract 90° before standard Cartesian `cos`/`sin`
 
-See `docs/PROCESS.md` for every locked radius, offset and the reasons behind them.
+The photographed pin is a few pixels away from the shared geometric center because the source is not perfectly orthographic. Programmatic layers intentionally use the shared center.
 
-## Important reality check
+## Reference limitations
 
-The orthographic photo is **still not perfectly flat**. Residual perspective, slight lens distortion and the case bezel overlapping the outer dial edge mean that a single set of concentric circles will never sit perfectly on every side at once. We locked the best visual compromise after extensive pixel-level iteration with the user. Do **not** chase sub-pixel perfection on the outer rails — it is physically impossible with this reference.
+The source retains slight perspective and lens distortion, and the case bezel obscures part of the printed dial edge. A single set of circles cannot match every side perfectly. The current constants are the visually approved compromise; do not re-center the whole dial to correct an isolated 1–3px discrepancy.
 
-## Next work
-
-1. Font-based week numbers (and later month names / day labels). Candidate fonts focus on digits 1, 2, 4, 7 matching the handwritten style of the real dial.
-2. Programmatic hands that can later be exported as separate rotated bitmaps for Garmin.
-3. Final clean export path scaled to 260×260 for the Fenix MIP display.
+See `docs/PROCESS.md` for the complete calibrated geometry and hand specifications.

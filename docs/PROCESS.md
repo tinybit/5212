@@ -1,6 +1,6 @@
 # Dial Reconstruction Process & Locked Geometry
 
-This document captures every useful fact from the multi-hour iterative session that produced the current SVG overlay. Future work (text, hands, Garmin export) should treat these values as the source of truth unless the user explicitly re-opens a constant.
+This document captures the calibrated geometry, typography, hands, motion, and debugging controls in the current SVG overlay. Treat these values as the source of truth unless the user explicitly re-opens a constant.
 
 ---
 
@@ -21,6 +21,8 @@ This document captures every useful fact from the multi-hour iterative session t
 | --- | --- |
 | `attachments/47322083-…-ExtraLarge.webp` | Original tilted / perspective photo. Used only in the earliest stages. |
 | `attachments/202415-51887.jpg` → `public/reference-ortho.jpg` | **Orthographic baseline**. 2911 × 2683 px. All measurements are relative to this image. |
+| `public/reference-ortho-cream.jpg` | Working reference with the exterior converted to dial cream. Used by the live component. |
+| `public/reference-handless.png` | Dial-only reference, aligned to the same 2911 × 2683 canvas and center as the working reference. |
 
 ### Why the photo is imperfect
 
@@ -51,7 +53,7 @@ CY = 1331
    - “three pixels up”, “two more up”, “one pixel to the right”, later “three down”, “two more down”, etc.
 4. Final confirmation: user stated “This is our center. Now, circles and sector lines, they're matching almost perfectly.”
 
-A bright pink dot (`r=7`) and a larger blue diagnostic circle (`r=37`) remain in the SVG purely as visual anchors. They can be removed later.
+The shared center remains the rotation origin for every hand. The photographed pin sits a few pixels away because of residual source distortion; do not move individual hands to the photographed pin.
 
 ---
 
@@ -59,14 +61,16 @@ A bright pink dot (`r=7`) and a larger blue diagnostic circle (`r=37`) remain in
 
 All radii measured from the shared center above.
 
-| Rail | Radius (px) | Color in overlay | Meaning |
-| --- | --- | --- | --- |
-| Day inner | 442 | Cyan `#00ccff` | Inner edge of day-of-week track |
-| Day outer | 547 | Cyan | Outer edge of day-of-week track |
-| Minute track | 787 | (orange dots only) | Radius of the small minute markers |
-| Week inner | 826 | Magenta `#ff0066` | Inner edge of week-number track |
-| Week outer | 928 | Magenta | Outer edge of week-number + month track |
-| Dial edge | 1030 | Magenta | True outer edge of the printed dial (slightly under the case) |
+| Rail | Radius (px) | Meaning |
+| --- | --- | --- |
+| Day inner | 442 | Inner edge of day-of-week track |
+| Day outer | 547 | Outer edge of day-of-week track |
+| Minute track | 787 | Radius of the small minute markers |
+| Week inner | 826 | Inner edge of week-number track |
+| Week outer | 928 | Outer edge of week-number + month track |
+| Dial edge | 1030 | True outer edge of the printed dial (slightly under the case) |
+
+All final rails, circles, sector lines, and marker linework are black. `DIAL_STROKE_WIDTH = 9`.
 
 The outer edge was walked up from ~970 → 1000 → 1030 until the user confirmed it correctly sits just under the case lip.
 
@@ -94,7 +98,7 @@ Only the *odd* gaps are drawn (the lines that sit between the week numbers). Mag
 
 ```
 R_WEEK_DOT = (826 + 928) / 2 ≈ 877
-WEEK_DOT_RADIUS = 18.48
+WEEK_DOT_RADIUS = 14.36848875
 ```
 
 (Earlier attempts at measured non-uniform angles were rejected by the user in favor of the uniform 53-grid.)
@@ -181,12 +185,29 @@ function hourAngleDeg(h: number) {
 
 ## 8. UI controls
 
-Two independent toggles live under the dial:
+Controls live in two rows under the dial.
 
-1. **Photo opacity** — cycles `1 → 0.5 → 0` (labels “Photo: 100% / 50% / OFF”).
-2. **Drawing** — shows / hides the entire SVG overlay.
+Row 1:
 
-Both are pure client state inside `WeeklyCalendarWatch`.
+- **Photo** — cycles `1 → 0.5 → 0` (`Photo: 100% / 50% / OFF`).
+- **Reference** — switches between the complete watch image and the aligned dial-only image.
+- **Drawing** — shows or hides dial lines, text, markers, batons, and center diagnostics.
+- **Guides** — shows or hides all glyph-center circles and radial alignment rays.
+- **Hands** — shows or hides the complete programmatic hand stack.
+
+Photo, drawing, guides, and hands are independent layers. Toggling any one must not mutate or override the state of another.
+
+Row 2 contains independent `ON/OFF` controls for:
+
+- **Week**
+- **Day**
+- **Hour**
+- **Minute**
+- **Second**
+
+All controls are client state inside `WeeklyCalendarWatch`.
+
+A fixed hand selector and vertical `0–360°` slider can manually override any hand angle. **Live** clears the selected hand override. **Pause** freezes live clock/calendar state; **Continue** clears manual overrides and resumes from the current time.
 
 ---
 
@@ -208,19 +229,142 @@ function polarPoint(degFrom12: number, r: number) {
 
 ---
 
-## 10. Text / numerals (work in progress)
+## 10. Text / numerals
 
 The real dial uses a handwritten-looking style for week numbers, month names, day abbreviations, etc.
 
-- Early attempt to *trace* the week “1” as a path was abandoned (size / placement never matched).
-- Agreed next approach: find a font that approximates the handwritten digits (especially **1, 2, 4, 7**) and place instances programmatically so the user can nudge positions.
-- Candidate direction discussed: elegant upright serif / semi-script fonts (Cormorant Garamond family was mentioned; exact final choice still open). Crossed-7 and open-4 behavior must be checked carefully.
+- Final font: **Indie Flower**, loaded from Google Fonts and exposed as `--font-display`.
+- Week numerals, month names, and weekday names are rendered as individual SVG glyphs in uppercase where appropriate.
+- Glyph centers were measured from polar-unwrapped crops of `reference-ortho.jpg` and stored in `MONTH_GLYPH_CENTERS` and `DAY_GLYPH_CENTERS`.
+- Week labels use the uniform 53-position grid and tangent-based spacing.
+- Per-glyph maps provide radial, scale, and rotation corrections for optical matching.
+- Final glyph fill is black with `fontWeight={700}`.
+- Week font size: `100`.
+- Month font size: `100`.
+- Day font size: `65.61`, with spacing scale `1.1`.
+- Tuesday `A`/`Y` and Friday `F` include the approved 180° orientation corrections.
 
-No text is currently rendered in the SVG.
+Guides combine week, month, and day glyph centers into one layer. Every guide includes a center circle and a ray extending from the shared dial center.
 
 ---
 
-## 11. Garmin target notes
+## 11. Programmatic hands
+
+Five hands are rendered as separate SVG groups. Their required bottom-to-top stacking order is:
+
+1. Day of week
+2. Week of year / month
+3. Hour
+4. Minute
+5. Seconds
+
+### Seconds hand
+
+The 5212A uses caliber **26-330 S C J SE**, officially specified at **28,800 semi-oscillations/hour (4 Hz)**. The visible seconds hand therefore advances eight times per second:
+
+```text
+tick interval = 125 ms
+angle per tick = 0.75°
+```
+
+The timer is synchronized to `Date.now()` on every update so delays do not accumulate. Its upper blade is a flat gray tapered polygon. The lower counterweight is a five-vertex polygon with a gray-to-black vertical gradient and pointed end. The hub uses measured radial metallic gradients.
+
+Key geometry:
+
+```text
+tip y                    = 536
+neck y                   = 1287
+tip half-width           = 3.84912
+neck half-width          = 6.29856
+hub radius               = 41.36
+tail shoulder y          = 1358
+tail end y               = 1618
+tail point y             = 1643
+tail shoulder half-width = 13.5
+tail end half-width      = 27
+```
+
+### Minute hand
+
+Two-facet Dauphine kite measured from the reference and a user-traced silhouette:
+
+```text
+reference angle = 56.85°
+tip radius      = 786
+rear radius     = -105
+base radius     = -25
+half-width      = 60
+```
+
+The current minute angle includes elapsed seconds and milliseconds:
+
+```text
+(minutes + seconds / 60) × 6°
+```
+
+### Hour hand
+
+Shorter and broader two-facet Dauphine kite:
+
+```text
+reference angle = -55.2°
+tip radius      = 510
+rear radius     = -125
+base radius     = -15
+half-width      = 72
+tip half-width  = 3
+```
+
+The current hour angle includes minutes, seconds, and milliseconds:
+
+```text
+((hours % 12) + minutes / 60 + seconds / 3600) × 30°
+```
+
+### Week-of-year / month hand
+
+The reference points to week 33 on the uniform 53-position grid. At runtime the hand rotates to the current ISO week.
+
+```text
+reference week          = 33
+reference angle         = 6.5° + 32 × (360° / 53)
+head center radius      = 818
+shaft start radius      = 25
+shaft half-width        = 6.48
+head half-width         = 57
+head half-thickness     = 11.7
+```
+
+The shaft profile was measured directly from source pixels. It remains near-black through 48% of its length, transitions sharply between 48–56%, then remains dark gray near RGB `(49, 46, 41)`.
+
+The red hammer head is an annular sector rather than a rectangle. Its long edges are concentric with the week rail. The source red median is approximately RGB `(178, 48, 58)`.
+
+### Day-of-week hand
+
+The reference points to Wednesday (`Date.getDay() === 3`). Runtime rotation maps Sunday through Saturday directly onto the seven sector centers.
+
+```text
+reference day           = 3 (Wednesday)
+reference angle         = 153.7714°
+head center radius      = 432
+shaft start radius      = 25
+shaft half-width        = 7.5
+head half-width         = 72
+head half-thickness     = 11.7
+```
+
+The measured shaft is approximately 15px wide and mostly flat dark gray around RGB `(79, 77, 74)`. Its red head is also an annular sector and intentionally shares the week hand’s red-head thickness.
+
+### Shared hand helpers
+
+- `handPoint(angle, along, lateral)` defines local hand coordinates.
+- `annularSectorPath(...)` creates curved calendar-hand heads.
+- All rotations use `(CX, CY)`.
+- Calendar and time hands are initialized to reference angles for stable server rendering, then synchronized after hydration.
+
+---
+
+## 12. Garmin target notes
 
 - Fenix 7 / 8 family face size: **260 × 260**.
 - Scale factor from photo → watch ≈ `130 / 1030 ≈ 0.126`.
@@ -229,23 +373,25 @@ No text is currently rendered in the SVG.
 
 ---
 
-## 12. Code structure (relevant parts only)
+## 13. Code structure (relevant parts only)
 
 ```
 src/components/WeeklyCalendarWatch.tsx
 ├── constants (all radii, offsets, skip sets, colors)
-├── polarPoint / polarLine helpers
+├── polarPoint / polarLine / handPoint / annularSectorPath helpers
 ├── hourAngleDeg
 ├── monthSectorLines / daySectorLines / weekSectorLines / weekDots / minuteDots
 ├── HourBaton component (4-facet polygon paths + rotate/translate)
-└── WeeklyCalendarWatch (photo + SVG + two toggle buttons)
+├── DayIndicatorHand / WeekIndicatorHand
+├── HourHand / MinuteHand / SecondsHand
+└── WeeklyCalendarWatch (clock state, photo, SVG layers, guides, and controls)
 ```
 
 Everything geometric lives in one file so the constants stay co-located with the drawing code. Do not scatter the radii into a separate config until the dial is finished.
 
 ---
 
-## 13. Lessons that should not be forgotten
+## 14. Lessons that should not be forgotten
 
 1. **Never trust a single “perfect” center from an automated polar unwrap.** The photo is imperfect; human visual lock-in against the live overlay is the only reliable method.
 2. **Outer rail radius 1030 deliberately overlaps the case slightly** because the printed dial continues under the bezel.
@@ -253,7 +399,10 @@ Everything geometric lives in one file so the constants stay co-located with the
 4. **Minute markers and hour batons share the same angular grid.** That is why the baton angle function is derived from the minute `k` index.
 5. **3 o’clock is special** — both the baton and its two neighboring minute dots are absent because of the date window.
 6. **Semi-transparent colored facets were essential** for matching the 3-D shading of the real applied indices. Opaque solid shapes hide alignment errors.
-7. **Two independent toggles** (photo opacity + drawing visibility) are the primary debugging interface. Keep them.
+7. **Layer controls are the primary debugging interface.** Keep photo, drawing, guides, and every hand independently toggleable.
+8. **Do not approximate curved hammer heads with rectangles.** Both red calendar heads follow concentric dial rails.
+9. **Measure gradients from source pixels.** The week shaft’s dark-to-gray change is localized, not a full-length linear ramp.
+10. **Preserve hand stacking order:** day, week, hour, minute, seconds.
 
 ---
 
