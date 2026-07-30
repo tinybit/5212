@@ -79,53 +79,75 @@ function toneMap(channel: number) {
   return 1 - Math.exp(-Math.max(0, channel) * 1.6);
 }
 
+export type PolishedMetalMaterial = {
+  baseColor: readonly [number, number, number];
+  environmentStrength: number;
+  areaSpecularStrength: number;
+  highlightExponent: number;
+  strokeScale: number;
+  facingReflectionStrength?: number;
+};
+
+export const BLACKENED_WHITE_GOLD: PolishedMetalMaterial = {
+  baseColor: [10, 11, 10],
+  environmentStrength: 0.7,
+  areaSpecularStrength: 0.3,
+  highlightExponent: 5,
+  strokeScale: 0.45,
+};
+
+export const DEEP_BLACK_PVD: PolishedMetalMaterial = {
+  baseColor: [3, 4, 3],
+  environmentStrength: 0.5,
+  areaSpecularStrength: 0.018,
+  highlightExponent: 5,
+  strokeScale: 0.45,
+};
+
+export const POLISHED_BLACK_PVD: PolishedMetalMaterial = {
+  baseColor: [3, 4, 3],
+  environmentStrength: 0.5,
+  areaSpecularStrength: 0.35,
+  highlightExponent: 64,
+  strokeScale: 0.45,
+  facingReflectionStrength: 0.3,
+};
+
 export function shadeMetalFacet(
   normal: Vec3,
   center: Vec3,
   lightPosition: Vec3,
   lightBrightness: number,
-  referenceDistance: number,
+  material: PolishedMetalMaterial = BLACKENED_WHITE_GOLD,
 ) {
-  const toLightVector = subtract3(lightPosition, center);
-  const distance = Math.hypot(toLightVector.x, toLightVector.y, toLightVector.z);
-  const toLight = normalize3(toLightVector);
-  const diffuse = Math.max(0, dot3(normal, toLight));
-  const attenuation = Math.min(1.35, Math.max(0.5, (referenceDistance / distance) ** 2));
+  const toLight = normalize3(subtract3(lightPosition, center));
+  const lightVisibility = Math.max(0, dot3(normal, toLight));
   const halfVector = normalize3({ x: toLight.x, y: toLight.y, z: toLight.z + 1 });
-  const specular =
-    Math.pow(Math.max(0, dot3(normal, halfVector)), 38) *
-    0.7 *
-    attenuation *
-    lightBrightness *
-    diffuse;
-  const level = 0.12 + diffuse * 0.95 * attenuation * lightBrightness;
-  const base = [72, 74, 71];
-  const channels = base.map((channel) =>
-    linearToSrgb(toneMap(srgbToLinear(channel) * level + specular)),
+  const areaHighlight =
+    Math.pow(
+      Math.max(0, dot3(normal, halfVector)),
+      material.highlightExponent,
+    ) *
+    lightVisibility *
+    material.areaSpecularStrength *
+    Math.max(0, lightBrightness);
+  const facingReflection =
+    Math.pow(lightVisibility, 4) *
+    Math.hypot(toLight.x, toLight.y) *
+    (material.facingReflectionStrength ?? 0) *
+    Math.max(0, lightBrightness);
+  const channels = material.baseColor.map((channel) =>
+    linearToSrgb(
+      toneMap(
+        srgbToLinear(channel) * material.environmentStrength +
+          areaHighlight +
+          facingReflection,
+      ),
+    ),
   );
   return {
     fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
-    stroke: `rgb(${Math.round(channels[0] * 0.55)} ${Math.round(channels[1] * 0.55)} ${Math.round(channels[2] * 0.55)})`,
-  };
-}
-
-export function lightShadowOffset(
-  lightPosition: Vec3,
-  objectHeight: number,
-  center: { x: number; y: number },
-  maxDistance = 52,
-) {
-  const lightX = lightPosition.x - center.x;
-  const lightY = lightPosition.y - center.y;
-  const horizontalDistance = Math.hypot(lightX, lightY);
-  if (horizontalDistance < 1e-6) return { dx: 0, dy: 0 };
-  const projectedDistance = Math.min(
-    maxDistance,
-    (objectHeight * horizontalDistance) / Math.max(lightPosition.z, 1),
-  );
-  return {
-    dx: (-lightX / horizontalDistance) * projectedDistance,
-    dy: (-lightY / horizontalDistance) * projectedDistance,
+    stroke: `rgb(${Math.round(channels[0] * material.strokeScale)} ${Math.round(channels[1] * material.strokeScale)} ${Math.round(channels[2] * material.strokeScale)})`,
   };
 }
 

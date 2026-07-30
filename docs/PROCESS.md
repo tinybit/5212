@@ -199,7 +199,7 @@ light y = CY + v × radius
 light z = sqrt(1 - u² - v²) × radius
 ```
 
-Each opaque metallic facet combines ambient light, Lambertian diffuse response, inverse-distance attenuation, and a Blinn–Phong specular term. Specular response is masked by `N·L`, and all calculations happen in linear RGB before exponential tone mapping back to sRGB. Normals and facet centers rotate with each marker, so the same light position produces different shading around the dial. Applied hour markers deliberately cast no SVG shadow because they sit directly on the dial; only the raised 3D hands project shadows away from the point light.
+The hour markers use a nearly black environmental reflection plus a broad area-source specular lobe. The polished black-PVD Dauphine hour/minute hands combine a strong narrow highlight with a broader metallic facing reflection: an overhead source leaves them black instead of washing both facets gray, while a side source makes the facet facing it substantially brighter and leaves the opposite facet dark. Neither material has a Lambertian diffuse term or distance attenuation across the dial. The flat seconds hand uses a separate deep-black response with a softer highlight, matching its almost-black appearance in the reference. It is sampled at nine positions from tip through counterweight and rendered with a continuous longitudinal gradient; finite-source height, incidence changes, and controlled distance falloff remain visible when the source is aligned near the hemisphere rim. The flat week and day indicator shafts use the same deep-black material and longitudinal lighting treatment while retaining their distinct red painted heads. Calculations happen in linear RGB before exponential tone mapping back to sRGB. Applied hour markers and dynamically lit hands deliberately cast no SVG shadows: the reference shows facet contrast but no reliably separable blade shadows, and horizon-level point-light projections looked artificial.
 
 The marker's pointed inner end remains one uninterrupted diamond-shaped face with a single optical normal and fill, avoiding a false triangular seam. The hour hand retains two visible facets by tapering its raised ridge down to the mathematically solved tip height, making both four-point surfaces planar; the minute hand already consists of two planar triangles.
 
@@ -320,6 +320,8 @@ angle per tick = 0.75°
 ```
 
 The timer is synchronized to `Date.now()` on every update so delays do not accumulate. Its upper blade is a flat gray tapered polygon. The lower counterweight is a five-vertex polygon with a gray-to-black vertical gradient and pointed end. The hub uses measured radial metallic gradients.
+
+Flat mode preserves that original artwork, including its original fixed filter. In 3D mode the blade and counterweight remain single, completely planar surfaces—there is no raised ridge or facet split—but their metallic colors respond to the shared hemisphere light. Their centers are evaluated independently for subtle point-light variation, with no generated cast shadow.
 
 Key geometry:
 

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   dateWindowLightModel,
   faceNormal,
-  lightShadowOffset,
   planeHeightAt,
+  POLISHED_BLACK_PVD,
   shadeMetalFacet,
   type DateWindowLightSettings,
   type Vec3,
@@ -74,27 +74,53 @@ describe("facet lighting", () => {
       { x: 0, y: 0, z: 0 },
       { x: 1481, y: 1331, z: -10 },
       0,
-      6180,
     );
     const backlit = shadeMetalFacet(
       { x: 0, y: 0, z: 1 },
       { x: 0, y: 0, z: 0 },
       { x: 1481, y: 1331, z: -10 },
       2,
-      6180,
     );
 
     expect(backlit.fill).toBe(ambient.fill);
   });
 
-  it("projects cast shadows away from the point light", () => {
-    const center = { x: 1381, y: 1331 };
-    expect(lightShadowOffset({ x: 1381, y: 1331, z: 100 }, 30, center)).toEqual({
-      dx: 0,
-      dy: 0,
-    });
-    const sideLight = lightShadowOffset({ x: 2381, y: 1331, z: 100 }, 30, center);
-    expect(sideLight.dx).toBeLessThan(0);
-    expect(sideLight.dy).toBeCloseTo(0);
+  it("treats the movable source as an area light without inverse-square falloff", () => {
+    const near = shadeMetalFacet(
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 100, y: 0, z: 100 },
+      1.92,
+    );
+    const far = shadeMetalFacet(
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 1000, y: 0, z: 1000 },
+      1.92,
+    );
+
+    expect(far.fill).toBe(near.fill);
+  });
+
+  it("keeps polished black facets dark until their reflection aligns", () => {
+    const normal = { x: 0.5, y: 0, z: Math.sqrt(0.75) };
+    const zenith = shadeMetalFacet(
+      normal,
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 1000 },
+      1.92,
+      POLISHED_BLACK_PVD,
+    );
+    const aligned = shadeMetalFacet(
+      normal,
+      { x: 0, y: 0, z: 0 },
+      { x: Math.sqrt(0.75) * 1000, y: 0, z: 500 },
+      1.92,
+      POLISHED_BLACK_PVD,
+    );
+    const redChannel = (fill: string) => Number(fill.match(/\d+/)?.[0]);
+
+    expect(redChannel(zenith.fill)).toBeLessThan(40);
+    expect(redChannel(aligned.fill)).toBeGreaterThan(180);
   });
 });

@@ -3,14 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import {
   averagePoints,
   dateWindowLightModel,
+  DEEP_BLACK_PVD,
   faceNormal,
-  lightShadowOffset,
   normalize3,
   planeHeightAt,
+  POLISHED_BLACK_PVD,
   rotateVector,
   shadeMetalFacet,
   type DateWindowLightSettings,
   type LightDiskPosition,
+  type PolishedMetalMaterial,
   type Vec3,
 } from "./watchLighting";
 
@@ -757,16 +759,62 @@ function markerFacetColor(
   lateralOffset: number,
   lightPosition: Vec3,
   lightBrightness: number,
+  material?: PolishedMetalMaterial,
 ) {
   const normal = normalize3(rotateVector(localNormal, markerAngle));
   const center = markerWorldPoint(localCenter, markerAngle, lateralOffset);
-  return shadeMetalFacet(
-    normal,
-    center,
-    lightPosition,
-    lightBrightness,
-    LIGHT_HEMISPHERE_RADIUS,
-  );
+  return shadeMetalFacet(normal, center, lightPosition, lightBrightness, material);
+}
+
+function flatPvdGradientStops({
+  baseAngle,
+  rotation,
+  startRadius,
+  endRadius,
+  lightPosition,
+  lightBrightness,
+  count = 7,
+}: {
+  baseAngle: number;
+  rotation: number;
+  startRadius: number;
+  endRadius: number;
+  lightPosition: Vec3;
+  lightBrightness: number;
+  count?: number;
+}) {
+  const effectiveLightPosition = {
+    ...lightPosition,
+    z: Math.max(lightPosition.z, LIGHT_HEMISPHERE_RADIUS * 0.32),
+  };
+  const angle = baseAngle + rotation;
+
+  return Array.from({ length: count }, (_, index) => {
+    const offset = index / (count - 1);
+    const radius = startRadius + (endRadius - startRadius) * offset;
+    const point = handPoint(angle, radius, 0);
+    const worldPoint = { ...point, z: 0 };
+    const distanceToLight = Math.hypot(
+      effectiveLightPosition.x - worldPoint.x,
+      effectiveLightPosition.y - worldPoint.y,
+      effectiveLightPosition.z,
+    );
+    const spatialFalloff = Math.min(
+      2.8,
+      Math.max(0.35, (LIGHT_HEMISPHERE_RADIUS / distanceToLight) ** 6.5),
+    );
+
+    return {
+      offset,
+      color: shadeMetalFacet(
+        { x: 0, y: 0, z: 1 },
+        worldPoint,
+        effectiveLightPosition,
+        lightBrightness * spatialFalloff,
+        DEEP_BLACK_PVD,
+      ),
+    };
+  });
 }
 
 type LitHandFace = {
@@ -784,53 +832,36 @@ function LitHandPrism({
   faces,
   lightBrightness,
   lightPosition,
-  prismHeight,
-  shadowId,
 }: {
   angle: number;
   faces: LitHandFace[];
   lightBrightness: number;
   lightPosition: Vec3;
-  prismHeight: number;
-  shadowId: string;
 }) {
-  const shadowOffset = lightShadowOffset(lightPosition, prismHeight, { x: CX, y: CY });
   return (
     <>
-      <defs>
-        <filter id={shadowId} x="-30%" y="-30%" width="170%" height="170%">
-          <feDropShadow
-            dx={shadowOffset.dx}
-            dy={shadowOffset.dy}
-            stdDeviation="4"
-            floodColor="#000000"
-            floodOpacity={0.08 * Math.min(2, lightBrightness)}
+      {faces.map((face) => {
+        const color = markerFacetColor(
+          face.normal,
+          averagePoints(face.points),
+          angle,
+          0,
+          lightPosition,
+          lightBrightness,
+          POLISHED_BLACK_PVD,
+        );
+        const projected = face.points.map((point) => markerWorldPoint(point, angle, 0));
+        return (
+          <path
+            key={face.key}
+            d={ptsToPath(projected)}
+            fill={color.fill}
+            stroke={color.stroke}
+            strokeWidth={2}
+            strokeLinejoin="round"
           />
-        </filter>
-      </defs>
-      <g filter={`url(#${shadowId})`}>
-        {faces.map((face) => {
-          const color = markerFacetColor(
-            face.normal,
-            averagePoints(face.points),
-            angle,
-            0,
-            lightPosition,
-            lightBrightness,
-          );
-          const projected = face.points.map((point) => markerWorldPoint(point, angle, 0));
-          return (
-            <path
-              key={face.key}
-              d={ptsToPath(projected)}
-              fill={color.fill}
-              stroke={color.stroke}
-              strokeWidth={2}
-              strokeLinejoin="round"
-            />
-          );
-        })}
-      </g>
+        );
+      })}
     </>
   );
 }
@@ -1374,8 +1405,28 @@ function HemisphereLightControl({
   );
 }
 
-function WeekIndicatorHand({ rotation }: { rotation: number }) {
+function WeekIndicatorHand({
+  lightBrightness,
+  lightPosition,
+  mode,
+  rotation,
+}: {
+  lightBrightness: number;
+  lightPosition: Vec3;
+  mode: MarkerMode;
+  rotation: number;
+}) {
+  const dynamicallyLit = mode === "3d";
+  const shaftStart = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, 0);
   const headCenter = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, 0);
+  const litShaftStops = flatPvdGradientStops({
+    baseAngle: WEEK_HAND_ANGLE_DEG,
+    rotation,
+    startRadius: WEEK_HAND_SHAFT_START_RADIUS,
+    endRadius: WEEK_HAND_HEAD_RADIUS,
+    lightPosition,
+    lightBrightness,
+  });
   const shaft = [
     handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, -WEEK_HAND_SHAFT_HALF_WIDTH),
     handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, -WEEK_HAND_SHAFT_HALF_WIDTH),
@@ -1392,6 +1443,7 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
   return (
     <g
       data-week-indicator-hand
+      data-hand-rendering={dynamicallyLit ? "lit-flat" : "flat"}
       style={{
         transform: `rotate(${rotation}deg)`,
         transformOrigin: `${CX}px ${CY}px`,
@@ -1419,16 +1471,36 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
           <stop offset="52%" stopColor="#b2303a" />
           <stop offset="100%" stopColor="#8f1d28" />
         </linearGradient>
+        <linearGradient
+          id="week-hand-shaft-lit-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1={shaftStart.x}
+          y1={shaftStart.y}
+          x2={headCenter.x}
+          y2={headCenter.y}
+        >
+          {litShaftStops.map((stop) => (
+            <stop
+              key={stop.offset}
+              offset={`${stop.offset * 100}%`}
+              stopColor={stop.color.fill}
+            />
+          ))}
+        </linearGradient>
         <filter id="week-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
           <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
-      <g filter="url(#week-hand-shadow)">
+      <g filter={dynamicallyLit ? undefined : "url(#week-hand-shadow)"}>
         <path
           d={ptsToPath(shaft)}
-          fill="url(#week-hand-shaft-gradient)"
-          stroke="#171815"
+          fill={
+            dynamicallyLit
+              ? "url(#week-hand-shaft-lit-gradient)"
+              : "url(#week-hand-shaft-gradient)"
+          }
+          stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#171815"}
           strokeWidth={1.44}
         />
         <path
@@ -1443,8 +1515,28 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
   );
 }
 
-function DayIndicatorHand({ rotation }: { rotation: number }) {
+function DayIndicatorHand({
+  lightBrightness,
+  lightPosition,
+  mode,
+  rotation,
+}: {
+  lightBrightness: number;
+  lightPosition: Vec3;
+  mode: MarkerMode;
+  rotation: number;
+}) {
+  const dynamicallyLit = mode === "3d";
+  const shaftStart = handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, 0);
   const headCenter = handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, 0);
+  const litShaftStops = flatPvdGradientStops({
+    baseAngle: DAY_HAND_ANGLE_DEG,
+    rotation,
+    startRadius: DAY_HAND_SHAFT_START_RADIUS,
+    endRadius: DAY_HAND_HEAD_RADIUS,
+    lightPosition,
+    lightBrightness,
+  });
   const shaft = [
     handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, -DAY_HAND_SHAFT_HALF_WIDTH),
     handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, -DAY_HAND_SHAFT_HALF_WIDTH),
@@ -1461,6 +1553,7 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
   return (
     <g
       data-day-indicator-hand
+      data-hand-rendering={dynamicallyLit ? "lit-flat" : "flat"}
       style={{
         transform: `rotate(${rotation}deg)`,
         transformOrigin: `${CX}px ${CY}px`,
@@ -1486,16 +1579,36 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
           <stop offset="52%" stopColor="#ac353e" />
           <stop offset="100%" stopColor="#8e2530" />
         </linearGradient>
+        <linearGradient
+          id="day-hand-shaft-lit-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1={shaftStart.x}
+          y1={shaftStart.y}
+          x2={headCenter.x}
+          y2={headCenter.y}
+        >
+          {litShaftStops.map((stop) => (
+            <stop
+              key={stop.offset}
+              offset={`${stop.offset * 100}%`}
+              stopColor={stop.color.fill}
+            />
+          ))}
+        </linearGradient>
         <filter id="day-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
           <feDropShadow dx="5" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
-      <g filter="url(#day-hand-shadow)">
+      <g filter={dynamicallyLit ? undefined : "url(#day-hand-shadow)"}>
         <path
           d={ptsToPath(shaft)}
-          fill="url(#day-hand-shaft-gradient)"
-          stroke="#363633"
+          fill={
+            dynamicallyLit
+              ? "url(#day-hand-shaft-lit-gradient)"
+              : "url(#day-hand-shaft-gradient)"
+          }
+          stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#363633"}
           strokeWidth={1.4}
         />
         <path
@@ -1582,8 +1695,6 @@ function HourHand({
           faces={faces}
           lightBrightness={lightBrightness}
           lightPosition={lightPosition}
-          prismHeight={HOUR_HAND_PRISM_HEIGHT}
-          shadowId="hour-hand-3d-shadow"
         />
       </g>
     );
@@ -1697,8 +1808,6 @@ function MinuteHand({
           faces={faces}
           lightBrightness={lightBrightness}
           lightPosition={lightPosition}
-          prismHeight={MINUTE_HAND_PRISM_HEIGHT}
-          shadowId="minute-hand-3d-shadow"
         />
       </g>
     );
@@ -1755,7 +1864,17 @@ function MinuteHand({
   );
 }
 
-function SecondsHand({ rotation }: { rotation: number }) {
+function SecondsHand({
+  lightBrightness,
+  lightPosition,
+  mode,
+  rotation,
+}: {
+  lightBrightness: number;
+  lightPosition: Vec3;
+  mode: MarkerMode;
+  rotation: number;
+}) {
   const upperBlade = [
     { x: CX - SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
     { x: CX + SECOND_HAND_TIP_HALF_W, y: SECOND_HAND_TIP_Y },
@@ -1769,9 +1888,82 @@ function SecondsHand({ rotation }: { rotation: number }) {
     { x: CX, y: SECOND_HAND_TAIL_POINT_Y },
     { x: CX - SECOND_HAND_TAIL_END_HALF_W, y: SECOND_HAND_TAIL_END_Y },
   ];
+  const effectiveAreaLightPosition = {
+    ...lightPosition,
+    z: Math.max(lightPosition.z, LIGHT_HEMISPHERE_RADIUS * 0.32),
+  };
+  const gradientStartY = SECOND_HAND_TIP_Y;
+  const gradientEndY = SECOND_HAND_TAIL_POINT_Y;
+  const gradientSpan = gradientEndY - gradientStartY;
+  const handGradientStops = Array.from({ length: 9 }, (_, index) => {
+    const offset = index / 8;
+    const y = gradientStartY + gradientSpan * offset;
+    const worldPoint = markerWorldPoint({ x: 0, y: y - CY, z: 0 }, rotation, 0);
+    const distanceToLight = Math.hypot(
+      effectiveAreaLightPosition.x - worldPoint.x,
+      effectiveAreaLightPosition.y - worldPoint.y,
+      effectiveAreaLightPosition.z - worldPoint.z,
+    );
+    const spatialFalloff = Math.min(
+      2.8,
+      Math.max(0.35, (LIGHT_HEMISPHERE_RADIUS / distanceToLight) ** 6.5),
+    );
+    return {
+      offset,
+      color: shadeMetalFacet(
+        { x: 0, y: 0, z: 1 },
+        worldPoint,
+        effectiveAreaLightPosition,
+        lightBrightness * spatialFalloff,
+        DEEP_BLACK_PVD,
+      ),
+    };
+  });
+  const hubCenter = { x: CX, y: CY, z: 0 };
+  const hubToLight = normalize3({
+    x: effectiveAreaLightPosition.x - hubCenter.x,
+    y: effectiveAreaLightPosition.y - hubCenter.y,
+    z: effectiveAreaLightPosition.z - hubCenter.z,
+  });
+  const hubHighlightNormal = normalize3({
+    x: hubToLight.x,
+    y: hubToLight.y,
+    z: hubToLight.z + 1,
+  });
+  const localHubHighlight = rotateVector(hubHighlightNormal, -rotation);
+  const hubHighlightColor = shadeMetalFacet(
+    hubHighlightNormal,
+    hubCenter,
+    effectiveAreaLightPosition,
+    lightBrightness,
+    DEEP_BLACK_PVD,
+  );
+  const hubFaceColor = shadeMetalFacet(
+    { x: 0, y: 0, z: 1 },
+    hubCenter,
+    effectiveAreaLightPosition,
+    lightBrightness,
+    DEEP_BLACK_PVD,
+  );
+  const hubUnlitColor = shadeMetalFacet(
+    { x: 0, y: 0, z: 1 },
+    hubCenter,
+    effectiveAreaLightPosition,
+    0,
+    DEEP_BLACK_PVD,
+  );
+  const hubHighlightX = CX + localHubHighlight.x * SECOND_HAND_HUB_RADIUS * 0.58;
+  const hubHighlightY = CY + localHubHighlight.y * SECOND_HAND_HUB_RADIUS * 0.58;
+  const pinHighlightX = CX + localHubHighlight.x * 5.8;
+  const pinHighlightY = CY + localHubHighlight.y * 5.8;
+  const dynamicallyLit = mode === "3d";
 
   return (
-    <g data-seconds-hand transform={`rotate(${rotation} ${CX} ${CY})`}>
+    <g
+      data-seconds-hand
+      data-hand-rendering={dynamicallyLit ? "lit-flat" : "flat"}
+      transform={`rotate(${rotation} ${CX} ${CY})`}
+    >
       <defs>
         <linearGradient id="seconds-tail-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#62635f" />
@@ -1789,42 +1981,103 @@ function SecondsHand({ rotation }: { rotation: number }) {
           <stop offset="62%" stopColor="#777975" />
           <stop offset="100%" stopColor="#242522" />
         </radialGradient>
+        <radialGradient
+          id="seconds-hub-lit-gradient"
+          gradientUnits="userSpaceOnUse"
+          cx={hubHighlightX}
+          cy={hubHighlightY}
+          r={SECOND_HAND_HUB_RADIUS * 1.2}
+        >
+          <stop offset="0%" stopColor={hubHighlightColor.fill} />
+          <stop offset="34%" stopColor={hubFaceColor.fill} />
+          <stop offset="100%" stopColor={hubUnlitColor.fill} />
+        </radialGradient>
+        <radialGradient
+          id="seconds-pin-lit-gradient"
+          gradientUnits="userSpaceOnUse"
+          cx={pinHighlightX}
+          cy={pinHighlightY}
+          r={13}
+        >
+          <stop offset="0%" stopColor={hubHighlightColor.fill} />
+          <stop offset="38%" stopColor={hubFaceColor.fill} />
+          <stop offset="100%" stopColor={hubUnlitColor.fill} />
+        </radialGradient>
+        <linearGradient
+          id="seconds-hand-lit-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1={CX}
+          y1={gradientStartY}
+          x2={CX}
+          y2={gradientEndY}
+        >
+          {handGradientStops.map((stop) => (
+            <stop
+              key={stop.offset}
+              offset={`${stop.offset * 100}%`}
+              stopColor={stop.color.fill}
+            />
+          ))}
+        </linearGradient>
         <filter id="seconds-hand-shadow" x="-30%" y="-10%" width="170%" height="130%">
           <feDropShadow dx="5" dy="5" stdDeviation="4" floodColor="#000000" floodOpacity="0.12" />
         </filter>
       </defs>
 
-      <g filter="url(#seconds-hand-shadow)">
+      <g filter={dynamicallyLit ? undefined : "url(#seconds-hand-shadow)"}>
         <path
           d={ptsToPath(counterweight)}
-          fill="url(#seconds-tail-gradient)"
-          stroke="#555651"
+          fill={
+            dynamicallyLit
+              ? "url(#seconds-hand-lit-gradient)"
+              : "url(#seconds-tail-gradient)"
+          }
+          stroke={
+            dynamicallyLit
+              ? handGradientStops[handGradientStops.length - 1].color.stroke
+              : "#555651"
+          }
           strokeWidth={1.5}
         />
         <path
           d={ptsToPath(upperBlade)}
-          fill="#858681"
-          stroke="#666762"
+          fill={dynamicallyLit ? "url(#seconds-hand-lit-gradient)" : "#858681"}
+          stroke={dynamicallyLit ? handGradientStops[0].color.stroke : "#666762"}
           strokeWidth={1.728}
         />
         <circle
           cx={CX}
           cy={CY}
           r={SECOND_HAND_HUB_RADIUS}
-          fill="url(#seconds-hub-gradient)"
-          stroke="#565753"
+          fill={
+            dynamicallyLit
+              ? "url(#seconds-hub-lit-gradient)"
+              : "url(#seconds-hub-gradient)"
+          }
+          stroke={dynamicallyLit ? hubUnlitColor.stroke : "#565753"}
           strokeWidth={4}
         />
-        <circle cx={CX} cy={CY} r={15} fill="#343532" />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={15}
+          fill={dynamicallyLit ? "url(#seconds-hub-lit-gradient)" : "#343532"}
+        />
         <circle
           cx={CX}
           cy={CY}
           r={10}
-          fill="url(#seconds-pin-gradient)"
-          stroke="#20211f"
+          fill={
+            dynamicallyLit
+              ? "url(#seconds-pin-lit-gradient)"
+              : "url(#seconds-pin-gradient)"
+          }
+          stroke={dynamicallyLit ? hubUnlitColor.stroke : "#20211f"}
           strokeWidth={2}
         />
-        <circle cx={CX - 3} cy={CY - 4} r={3.5} fill="#ffffff" opacity={0.82} />
+        {!dynamicallyLit && (
+          <circle cx={CX - 3} cy={CY - 4} r={3.5} fill="#ffffff" opacity={0.82} />
+        )}
       </g>
     </g>
   );
@@ -2423,8 +2676,22 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             className="transition-opacity duration-200"
             style={{ opacity: handsVisible ? 1 : 0 }}
           >
-            {dayHandVisible && <DayIndicatorHand rotation={dayHandRotation} />}
-            {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
+            {dayHandVisible && (
+              <DayIndicatorHand
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+                mode={markerMode}
+                rotation={dayHandRotation}
+              />
+            )}
+            {weekHandVisible && (
+              <WeekIndicatorHand
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+                mode={markerMode}
+                rotation={weekHandRotation}
+              />
+            )}
             {hourHandVisible && (
               <HourHand
                 lightBrightness={markerLightBrightness}
@@ -2441,7 +2708,14 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
                 rotation={minuteHandRotation}
               />
             )}
-            {secondsHandVisible && <SecondsHand rotation={displayedSecondsHandRotation} />}
+            {secondsHandVisible && (
+              <SecondsHand
+                lightBrightness={markerLightBrightness}
+                lightPosition={markerLightPosition}
+                mode={markerMode}
+                rotation={displayedSecondsHandRotation}
+              />
+            )}
           </g>
         </svg>
 
