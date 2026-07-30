@@ -55,20 +55,72 @@ const WEEK_STEP_DEG = 360 / WEEK_COUNT;
 const WEEK_OFFSET_DEG = 6.5;
 
 /**
- * User-locked gap ray left of week 1 (CW from 12). Do not move.
- * Confirmed: all pixels of printed 1 are to the right of this ray.
+ * Week-label glyph geometry, calibrated from the printed week "3":
+ * center (1681, 511), radius from the dial center ≈873 px.
+ *
+ * The dial prints odd week numbers 1–53 on the uniform 53-position grid.
+ * Two-digit labels are laid out along the local tangent to the band.
  */
-const RAY_BEFORE_W1 = 5.4221;
-const RAY_R = 1120;
-
-/**
- * Printed week "3" on reference-ortho.jpg (full-res, no resample).
- * CORRECTED: center (1681, 511) = black digit "3" at ang≈20.12°.
- * Previous wrong center (1777, 550) was the separator between 3 and 5.
- * Sequence: sep@13° · 3@20° · sep@27° · 5@33° · sep@40°.
- * Native proof: PROOF-3-at-1681.png / PROOF-wide.png
- */
-const WEEK_3 = { cx: 1681, cy: 511, r: 48 };
+const R_WEEK_GLYPH = Math.hypot(1681 - CX, 511 - CY);
+const WEEK_DIGIT_SPACING = 48;
+const WEEK_DIGIT_MARKER_RADIUS = 42;
+const WEEK_DIGIT_FONT_SIZE = 100;
+/** Per-glyph radial nudges in photo pixels. Positive = out, negative = in. */
+const WEEK_DIGIT_RADIAL_ADJUSTMENTS: Record<string, number> = {
+  "5-0": -3,
+  "15-0": 3,
+  "15-1": 8,
+  "17-0": 8,
+  "17-1": 8,
+  "19-0": 7,
+  "19-1": 7,
+  "25-0": 5,
+  "25-1": 10,
+  "27-0": 5,
+  "27-1": 5,
+  "29-0": 5,
+  "29-1": 5,
+  "31-0": 5,
+  "31-1": 5,
+  "33-0": 5,
+  "33-1": 5,
+  "35-0": 3,
+  "35-1": 10,
+  "37-0": 5,
+  "37-1": 5,
+  "39-0": 5,
+  "39-1": 5,
+  "45-1": -5,
+  "51-0": -5,
+  "53-0": -5,
+};
+/** Per-glyph font scale. Values are relative to the default size. */
+const WEEK_DIGIT_SCALE_ADJUSTMENTS: Record<string, number> = {
+  "1-0": 1.1,
+  "3-0": 1.1,
+  "5-0": 0.9,
+  "7-0": 1.1,
+  "9-0": 1.1,
+  "11-0": 1.1,
+  "11-1": 1.1,
+  "13-0": 1.1,
+  "13-1": 1.1,
+  "15-1": 0.8505,
+  "17-0": 1.05,
+  "17-1": 1.05,
+  "19-0": 1.05,
+  "19-1": 1.05,
+  "25-1": 0.81,
+  "35-1": 0.81,
+  "45-0": 0.95,
+  "45-1": 0.855,
+  "51-0": 0.81,
+  "53-0": 0.81,
+};
+/** Per-glyph rotation nudges in degrees. Positive = clockwise. */
+const WEEK_DIGIT_ROTATION_ADJUSTMENTS: Record<string, number> = {
+  "1-0": -7,
+};
 
 const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
@@ -132,6 +184,66 @@ function weekDots() {
   return weekGapDegrees().map((deg) => polarPoint(deg, R_WEEK_DOT));
 }
 
+function weekDigitMarkers() {
+  const markers: {
+    week: number;
+    digit: string;
+    index: number;
+    x: number;
+    y: number;
+    digitX: number;
+    digitY: number;
+    rayX: number;
+    rayY: number;
+    rotation: number;
+    scale: number;
+  }[] = [];
+
+  for (let week = 1; week <= WEEK_COUNT; week += 2) {
+    const digits = String(week);
+    const angle = WEEK_OFFSET_DEG + (week - 1) * WEEK_STEP_DEG;
+    const center = polarPoint(angle, R_WEEK_GLYPH);
+    const angleRad = (angle * Math.PI) / 180;
+    const tangentX = Math.cos(angleRad);
+    const tangentY = Math.sin(angleRad);
+    const readingDirection = angle > 90 && angle < 270 ? -1 : 1;
+
+    for (let index = 0; index < digits.length; index++) {
+      const tangentOffset =
+        (index - (digits.length - 1) / 2) * WEEK_DIGIT_SPACING * readingDirection;
+      const x = center.x + tangentX * tangentOffset;
+      const y = center.y + tangentY * tangentOffset;
+      const distanceFromCenter = Math.hypot(x - CX, y - CY);
+      const rayScale = R_DIAL_EDGE / distanceFromCenter;
+      const rayAngle = (Math.atan2(x - CX, CY - y) * 180) / Math.PI;
+      const normalizedRayAngle = (rayAngle + 360) % 360;
+      const rotation =
+        normalizedRayAngle > 90 && normalizedRayAngle < 270
+          ? normalizedRayAngle - 180
+          : normalizedRayAngle;
+      const radialAdjustment = WEEK_DIGIT_RADIAL_ADJUSTMENTS[`${week}-${index}`] ?? 0;
+      const scale = WEEK_DIGIT_SCALE_ADJUSTMENTS[`${week}-${index}`] ?? 1;
+      const rotationAdjustment = WEEK_DIGIT_ROTATION_ADJUSTMENTS[`${week}-${index}`] ?? 0;
+
+      markers.push({
+        week,
+        digit: digits[index],
+        index,
+        x,
+        y,
+        digitX: x + ((x - CX) / distanceFromCenter) * radialAdjustment,
+        digitY: y + ((y - CY) / distanceFromCenter) * radialAdjustment,
+        rayX: CX + (x - CX) * rayScale,
+        rayY: CY + (y - CY) * rayScale,
+        rotation: rotation + rotationAdjustment,
+        scale,
+      });
+    }
+  }
+
+  return markers;
+}
+
 function minuteDots() {
   const dots = [];
   for (let k = 0; k < 60; k++) {
@@ -143,32 +255,6 @@ function minuteDots() {
 
 function ptsToPath(pts: { x: number; y: number }[]) {
   return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + " Z";
-}
-
-function Ray({ ang, color, width = 3 }: { ang: number; color: string; width?: number }) {
-  const end = polarPoint(ang, RAY_R);
-  return (
-    <g>
-      <line
-        x1={CX}
-        y1={CY}
-        x2={end.x}
-        y2={end.y}
-        stroke="#000000"
-        strokeWidth={width + 3}
-        strokeLinecap="butt"
-      />
-      <line
-        x1={CX}
-        y1={CY}
-        x2={end.x}
-        y2={end.y}
-        stroke={color}
-        strokeWidth={width}
-        strokeLinecap="butt"
-      />
-    </g>
-  );
 }
 
 function HourBaton({
@@ -231,11 +317,13 @@ function HourBaton({
 export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
   const [drawVisible, setDrawVisible] = useState(true);
+  const [digitGuidesVisible, setDigitGuidesVisible] = useState(true);
   const photoOpacity = PHOTO_OPACITY[opacityIdx];
   const monthSectors = monthSectorLines();
   const daySectors = daySectorLines();
   const weekSectors = weekSectorLines();
   const wDots = weekDots();
+  const digitMarkers = weekDigitMarkers();
   const mDots = minuteDots();
 
   return (
@@ -324,37 +412,78 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           <HourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
           <HourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
 
+          {digitMarkers.map((marker) => (
+            <text
+              key={`digit-${marker.week}-${marker.index}`}
+              x={marker.digitX}
+              y={marker.digitY}
+              transform={`rotate(${marker.rotation} ${marker.digitX} ${marker.digitY})`}
+              fill="#ffffff"
+              fontFamily="'Indie Flower', cursive"
+              fontSize={WEEK_DIGIT_FONT_SIZE * marker.scale}
+              fontWeight={400}
+              textAnchor="middle"
+              dominantBaseline="central"
+            >
+              {marker.digit}
+            </text>
+          ))}
+
           <circle cx={CX} cy={CY} r={37} fill="#00a2ff" />
           <circle cx={CX} cy={CY} r={7} fill="#ff2bd6" stroke="#fff" strokeWidth="2" />
 
-          {/* User-locked ray before week 1 */}
-          <Ray ang={RAY_BEFORE_W1} color="#00ffff" width={3} />
           <circle cx={CX} cy={CY} r={10} fill="#00ffff" stroke="#000" strokeWidth={2} />
         </svg>
 
-        {/* Digit markers: always visible (even with Drawing OFF) */}
+        {/* One marker per printed glyph in the odd week-number sequence 1–53. */}
         <svg
           className="pointer-events-none absolute inset-0 h-full w-full"
           viewBox={`0 0 ${IMG_W} ${IMG_H}`}
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
+          style={{ opacity: digitGuidesVisible ? 1 : 0 }}
         >
-          <circle
-            cx={WEEK_3.cx}
-            cy={WEEK_3.cy}
-            r={WEEK_3.r + 5}
-            fill="none"
-            stroke="#000000"
-            strokeWidth={8}
-          />
-          <circle
-            cx={WEEK_3.cx}
-            cy={WEEK_3.cy}
-            r={WEEK_3.r}
-            fill="none"
-            stroke="#00ff00"
-            strokeWidth={5}
-          />
+          {digitMarkers.map((marker) => (
+            <g key={`ray-${marker.week}-${marker.index}`} opacity={0.72}>
+              <line
+                x1={CX}
+                y1={CY}
+                x2={marker.rayX}
+                y2={marker.rayY}
+                stroke="#000000"
+                strokeWidth={7}
+              />
+              <line
+                x1={CX}
+                y1={CY}
+                x2={marker.rayX}
+                y2={marker.rayY}
+                stroke="#00ffff"
+                strokeWidth={3}
+              />
+            </g>
+          ))}
+
+          {digitMarkers.map((marker) => (
+            <g key={`${marker.week}-${marker.index}`}>
+              <circle
+                cx={marker.x}
+                cy={marker.y}
+                r={WEEK_DIGIT_MARKER_RADIUS + 5}
+                fill="none"
+                stroke="#000000"
+                strokeWidth={8}
+              />
+              <circle
+                cx={marker.x}
+                cy={marker.y}
+                r={WEEK_DIGIT_MARKER_RADIUS}
+                fill="none"
+                stroke="#00ff00"
+                strokeWidth={5}
+              />
+            </g>
+          ))}
         </svg>
       </div>
 
@@ -372,6 +501,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
         >
           {drawVisible ? "Drawing: ON" : "Drawing: OFF"} · tap to toggle
+        </button>
+        <button
+          type="button"
+          onClick={() => setDigitGuidesVisible((visible) => !visible)}
+          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          {digitGuidesVisible ? "Digit guides: ON" : "Digit guides: OFF"} · tap to toggle
         </button>
       </div>
     </div>
