@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
-import { continuousIsoWeek, isoWeekCoordinates } from "./watchCalendar";
+import {
+  calendarMonthOrdinal,
+  continuousDateWheelAngle,
+  continuousIsoWeek,
+  isoWeekCoordinates,
+  localCalendarDayOrdinal,
+  unwrapCyclicAngles,
+} from "./watchCalendar";
 import {
   averagePoints,
   dateWindowLightModel,
@@ -55,6 +62,9 @@ const DATE_WHEEL_CALIBRATION = {
     4.9, 16.6, 28.0, 39.7, 51.4, 62.9, 74.5,
   ],
 } as const;
+const DATE_WHEEL_UNWRAPPED_ANGLES = unwrapCyclicAngles(
+  DATE_WHEEL_CALIBRATION.measuredAnglesDeg,
+);
 const SHADOW_CROP_X = 1999;
 const SHADOW_CROP_Y = 1245;
 const SHADOW_CROP_WIDTH = 200;
@@ -734,12 +744,6 @@ function annularSectorPath(angleDeg: number, radius: number, halfThickness: numb
     `A ${innerRadius} ${innerRadius} 0 0 0 ${innerStart.x} ${innerStart.y}`,
     "Z",
   ].join(" ");
-}
-
-function localCalendarDayOrdinal(date: Date) {
-  return Math.floor(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000,
-  );
 }
 
 type MarkerMode = "flat" | "3d";
@@ -2254,17 +2258,26 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const initialDateWheelDay = initialCalendarDate.getDate();
   const initialIsoWeek = isoWeekCoordinates(initialCalendarDate);
   const calendarDayAnchorRef = useRef({
+    dateWheelMonth: calendarMonthOrdinal(initialCalendarDate),
     isoWeekYear: initialIsoWeek.year,
     ordinal: localCalendarDayOrdinal(initialCalendarDate),
     weekday: initialCalendarDate.getDay(),
   });
   const [dateRingRotation, setDateRingRotation] = useState<number>(
-    DATE_WHEEL_CALIBRATION.measuredAnglesDeg[initialDateWheelDay - 1],
+    continuousDateWheelAngle(
+      initialCalendarDate,
+      calendarMonthOrdinal(initialCalendarDate),
+      DATE_WHEEL_UNWRAPPED_ANGLES,
+    ),
   );
   const [dateWheelDay, setDateWheelDay] = useState<number>(
     initialDateWheelDay,
   );
-  const [dateWheelManuallySet, setDateWheelManuallySet] = useState(false);
+  const [dateWheelManualDayOrdinal, setDateWheelManualDayOrdinal] =
+    useState<number | null>(null);
+  const dateWheelSyncedDayOrdinalRef = useRef(
+    localCalendarDayOrdinal(initialCalendarDate),
+  );
   const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
   const [dateRingOffset, setDateRingOffset] = useState({ x: -3, y: 1 });
   const [capturedDateRingAngles, setCapturedDateRingAngles] = useState<number[]>([]);
@@ -2275,6 +2288,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [secondsHandVisible, setSecondsHandVisible] = useState(true);
   const [selectedHand, setSelectedHand] = useState<HandKey>("second");
   const [manualHandAngles, setManualHandAngles] = useState<Partial<Record<HandKey, number>>>({});
+  const manualCalendarHandPeriodRef = useRef<Partial<Record<"day" | "week", number>>>({});
   const [clockTimeMs, setClockTimeMs] = useState<number>(initialClockTimeRef.current);
   const [timeScale, setTimeScale] = useState(1);
   const [timeRunning, setTimeRunning] = useState(true);
@@ -2305,12 +2319,56 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   }, [timeRunning, timeScale]);
 
   useEffect(() => {
-    if (clockTimeMs === null || dateWheelManuallySet) return;
-    const currentDate = new Date(clockTimeMs).getDate();
-    if (currentDate === dateWheelDay) return;
-    setDateWheelDay(currentDate);
-    setDateRingRotation(DATE_WHEEL_CALIBRATION.measuredAnglesDeg[currentDate - 1]);
-  }, [clockTimeMs, dateWheelDay, dateWheelManuallySet]);
+    if (clockTimeMs === null) return;
+
+    const currentDate = new Date(clockTimeMs);
+    const dayOrdinal = localCalendarDayOrdinal(currentDate);
+    if (dateWheelManualDayOrdinal === dayOrdinal) return;
+    if (
+      dateWheelManualDayOrdinal === null &&
+      dateWheelSyncedDayOrdinalRef.current === dayOrdinal
+    ) {
+      return;
+    }
+
+    const currentDay = currentDate.getDate();
+    dateWheelSyncedDayOrdinalRef.current = dayOrdinal;
+    setDateWheelManualDayOrdinal(null);
+    setDateWheelDay(currentDay);
+    setDateRingRotation(
+      continuousDateWheelAngle(
+        currentDate,
+        calendarDayAnchorRef.current.dateWheelMonth,
+        DATE_WHEEL_UNWRAPPED_ANGLES,
+      ),
+    );
+  }, [clockTimeMs, dateWheelManualDayOrdinal]);
+
+  useEffect(() => {
+    if (clockTimeMs === null) return;
+
+    const currentDate = new Date(clockTimeMs);
+    const currentIsoWeek = isoWeekCoordinates(currentDate);
+    const currentPeriods = {
+      day: localCalendarDayOrdinal(currentDate),
+      week: currentIsoWeek.year * 100 + currentIsoWeek.week,
+    };
+    const expiredHands = (["day", "week"] as const).filter(
+      (hand) =>
+        manualCalendarHandPeriodRef.current[hand] !== undefined &&
+        manualCalendarHandPeriodRef.current[hand] !== currentPeriods[hand],
+    );
+    if (expiredHands.length === 0) return;
+
+    setManualHandAngles((angles) => {
+      const nextAngles = { ...angles };
+      expiredHands.forEach((hand) => {
+        delete nextAngles[hand];
+        delete manualCalendarHandPeriodRef.current[hand];
+      });
+      return nextAngles;
+    });
+  }, [clockTimeMs]);
 
   const clockTime = clockTimeMs === null ? null : new Date(clockTimeMs);
   const secondsWithMilliseconds =
@@ -2420,15 +2478,24 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     const currentIsoWeek = isoWeekCoordinates(currentDate);
     clockAnchorRef.current = { realTimeMs: now, watchTimeMs: now };
     calendarDayAnchorRef.current = {
+      dateWheelMonth: calendarMonthOrdinal(currentDate),
       isoWeekYear: currentIsoWeek.year,
       ordinal: localCalendarDayOrdinal(currentDate),
       weekday: currentDate.getDay(),
     };
     setClockTimeMs(now);
     setManualHandAngles({});
-    setDateWheelManuallySet(false);
+    manualCalendarHandPeriodRef.current = {};
+    dateWheelSyncedDayOrdinalRef.current = localCalendarDayOrdinal(currentDate);
+    setDateWheelManualDayOrdinal(null);
     setDateWheelDay(currentDay);
-    setDateRingRotation(DATE_WHEEL_CALIBRATION.measuredAnglesDeg[currentDay - 1]);
+    setDateRingRotation(
+      continuousDateWheelAngle(
+        currentDate,
+        calendarMonthOrdinal(currentDate),
+        DATE_WHEEL_UNWRAPPED_ANGLES,
+      ),
+    );
     setTimeRunning(true);
   };
 
@@ -2450,6 +2517,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   };
 
   const returnSelectedHandToLive = () => {
+    if (selectedHand === "day" || selectedHand === "week") {
+      delete manualCalendarHandPeriodRef.current[selectedHand];
+    }
     setManualHandAngles((angles) => {
       const nextAngles = { ...angles };
       delete nextAngles[selectedHand];
@@ -2465,6 +2535,12 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   };
 
   const advanceCalendarHand = (hand: "week" | "day", step: number) => {
+    const currentDate = clockTime ?? new Date();
+    const currentIsoWeek = isoWeekCoordinates(currentDate);
+    manualCalendarHandPeriodRef.current[hand] =
+      hand === "day"
+        ? localCalendarDayOrdinal(currentDate)
+        : currentIsoWeek.year * 100 + currentIsoWeek.week;
     setManualHandAngles((angles) => ({
       ...angles,
       [hand]: (angles[hand] ?? liveHandAngles[hand]) + step,
@@ -2475,7 +2551,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const advanceDateWheel = () => {
     const nextDay = (dateWheelDay % DATE_WHEEL_CALIBRATION.dayCount) + 1;
     const measuredTarget = DATE_WHEEL_CALIBRATION.measuredAnglesDeg[nextDay - 1];
-    setDateWheelManuallySet(true);
+    setDateWheelManualDayOrdinal(
+      localCalendarDayOrdinal(clockTime ?? new Date()),
+    );
     setDateRingRotation((angle) => {
       const completedTurns = Math.floor(angle / 360);
       let unwrappedTarget = completedTurns * 360 + measuredTarget;
@@ -2610,7 +2688,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
                   closestDay = index + 1;
                 }
               });
-              setDateWheelManuallySet(true);
+              setDateWheelManualDayOrdinal(
+                localCalendarDayOrdinal(clockTime ?? new Date()),
+              );
               setDateRingRotation(angle);
               setDateWheelDay(closestDay);
             }}
@@ -2653,6 +2733,14 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           aria-label={`Rotate ${selectedHand} hand`}
           onChange={(event) => {
             const angle = Number(event.target.value);
+            if (selectedHand === "day" || selectedHand === "week") {
+              const currentDate = clockTime ?? new Date();
+              const currentIsoWeek = isoWeekCoordinates(currentDate);
+              manualCalendarHandPeriodRef.current[selectedHand] =
+                selectedHand === "day"
+                  ? localCalendarDayOrdinal(currentDate)
+                  : currentIsoWeek.year * 100 + currentIsoWeek.week;
+            }
             setManualHandAngles((angles) => ({ ...angles, [selectedHand]: angle }));
           }}
           className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
@@ -3184,7 +3272,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               onClick={() =>
                 setCapturedDateRingAngles((angles) => [
                   ...angles,
-                  Math.round(dateRingRotation * 10) / 10,
+                  Math.round(dateRingSliderAngle * 10) / 10,
                 ])
               }
               className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"

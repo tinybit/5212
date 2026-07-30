@@ -22,8 +22,8 @@ Implemented and calibrated:
   5. Seconds hand
 - Local-time hour and minute positioning.
 - Mechanical seconds motion at eight steps per second, matching the 4 Hz / 28,800 semi-oscillations-per-hour caliber 26-330 S C J SE.
-- Current ISO week and local weekday indication.
-- An aligned 1–31 date wheel isolated from the supplied movement photograph and composited beneath a transparent Reference 2 aperture with its original bevel shadow.
+- Perpetual local-calendar synchronization for the exact ISO week, weekday, and date, including variable month lengths and leap years.
+- An aligned 1–31 date wheel isolated from the supplied movement photograph and composited beneath a transparent Reference 2 aperture with its original bevel shadow. Invalid end-of-month dates are skipped automatically.
 
 Not implemented yet:
 
@@ -61,7 +61,7 @@ The dial controls are arranged in four rows:
 
 The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and interface controls hidden. The persistent `⚙️` button shows or hides all controls. Adjacent `10x`, `100x`, `1,000x`, `10,000x`, and `100,000x` buttons accelerate the simulated watch timeline from the local time captured when the page opens; pressing the active multiplier again returns to real-time speed. `Now` resets the simulated instant and all manual hand/date overrides to the current local time while preserving the selected speed. The mechanical eight-step seconds animation remains active through 10x, then switches to continuous simulated rotation above 10x so high-speed playback has no artificial beat pauses.
 
-The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue the current simulated timeline, and return a manually positioned hand to its live clock/calendar angle. Speed changes and pause/continue preserve the current simulated instant instead of snapping back to the computer clock. The marker mode also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. In 3D mode, the movable light panel positions a broad source on a hemisphere and controls its brightness; changes update polished black-metal reflections independently on every marker and hand, with a restrained deep-black PVD response on the flat seconds hand.
+The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue the current simulated timeline, and return a manually positioned hand to its live clock/calendar angle. Manual date and weekday positioning returns to live synchronization at the next simulated local date boundary; manual week positioning returns at the next ISO-week boundary. Speed changes and pause/continue preserve the current simulated instant instead of snapping back to the computer clock. The marker mode also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. In 3D mode, the movable light panel positions a broad source on a hemisphere and controls its brightness; changes update polished black-metal reflections independently on every marker and hand, with a restrained deep-black PVD response on the flat seconds hand.
 
 ## Key files
 

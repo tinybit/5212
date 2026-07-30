@@ -12,3 +12,32 @@ export function continuousIsoWeek(date: Date, anchorIsoWeekYear: number, weekCou
   const isoWeek = isoWeekCoordinates(date);
   return isoWeek.week + (isoWeek.year - anchorIsoWeekYear) * weekCount;
 }
+
+export function localCalendarDayOrdinal(date: Date) {
+  return Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000,
+  );
+}
+
+export function calendarMonthOrdinal(date: Date) {
+  return date.getFullYear() * 12 + date.getMonth();
+}
+
+export function unwrapCyclicAngles(angles: readonly number[]) {
+  let previous = Number.NEGATIVE_INFINITY;
+  return angles.map((angle) => {
+    let unwrapped = angle;
+    while (unwrapped <= previous) unwrapped += 360;
+    previous = unwrapped;
+    return unwrapped;
+  });
+}
+
+export function continuousDateWheelAngle(
+  date: Date,
+  anchorMonthOrdinal: number,
+  unwrappedDayAngles: readonly number[],
+) {
+  const monthTurns = calendarMonthOrdinal(date) - anchorMonthOrdinal;
+  return unwrappedDayAngles[date.getDate() - 1] + monthTurns * 360;
+}
