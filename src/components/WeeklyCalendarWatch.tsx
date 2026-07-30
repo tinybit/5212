@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { continuousIsoWeek, isoWeekCoordinates } from "./watchCalendar";
 import {
   averagePoints,
   dateWindowLightModel,
@@ -735,12 +736,10 @@ function annularSectorPath(angleDeg: number, radius: number, halfThickness: numb
   ].join(" ");
 }
 
-function isoWeekNumber(date: Date) {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNumber = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+function localCalendarDayOrdinal(date: Date) {
+  return Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000,
+  );
 }
 
 type MarkerMode = "flat" | "3d";
@@ -2250,11 +2249,20 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       wallStrength: 1.21,
       bevelStrength: 0.63,
     });
+  const initialClockTimeRef = useRef(Date.now());
+  const initialCalendarDate = new Date(initialClockTimeRef.current);
+  const initialDateWheelDay = initialCalendarDate.getDate();
+  const initialIsoWeek = isoWeekCoordinates(initialCalendarDate);
+  const calendarDayAnchorRef = useRef({
+    isoWeekYear: initialIsoWeek.year,
+    ordinal: localCalendarDayOrdinal(initialCalendarDate),
+    weekday: initialCalendarDate.getDay(),
+  });
   const [dateRingRotation, setDateRingRotation] = useState<number>(
-    DATE_WHEEL_CALIBRATION.dayOneAngleDeg,
+    DATE_WHEEL_CALIBRATION.measuredAnglesDeg[initialDateWheelDay - 1],
   );
   const [dateWheelDay, setDateWheelDay] = useState<number>(
-    DATE_WHEEL_CALIBRATION.initialDay,
+    initialDateWheelDay,
   );
   const [dateWheelManuallySet, setDateWheelManuallySet] = useState(false);
   const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
@@ -2267,25 +2275,34 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [secondsHandVisible, setSecondsHandVisible] = useState(true);
   const [selectedHand, setSelectedHand] = useState<HandKey>("second");
   const [manualHandAngles, setManualHandAngles] = useState<Partial<Record<HandKey, number>>>({});
-  const [clockTimeMs, setClockTimeMs] = useState<number | null>(null);
+  const [clockTimeMs, setClockTimeMs] = useState<number>(initialClockTimeRef.current);
+  const [timeScale, setTimeScale] = useState(1);
   const [timeRunning, setTimeRunning] = useState(true);
+  const clockAnchorRef = useRef({
+    realTimeMs: initialClockTimeRef.current,
+    watchTimeMs: initialClockTimeRef.current,
+  });
 
   useEffect(() => {
     if (!timeRunning) return;
 
     let timerId: number;
 
-    const advanceSecondsHand = () => {
-      const now = Date.now();
-      setClockTimeMs(now);
-
-      const nextTickDelay = SECOND_HAND_TICK_MS - (now % SECOND_HAND_TICK_MS);
-      timerId = window.setTimeout(advanceSecondsHand, nextTickDelay);
+    const advanceClock = () => {
+      const realTimeMs = Date.now();
+      const anchor = clockAnchorRef.current;
+      setClockTimeMs(
+        anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale,
+      );
+      timerId = window.setTimeout(
+        advanceClock,
+        Math.max(30, SECOND_HAND_TICK_MS / timeScale),
+      );
     };
 
-    advanceSecondsHand();
+    advanceClock();
     return () => window.clearTimeout(timerId);
-  }, [timeRunning]);
+  }, [timeRunning, timeScale]);
 
   useEffect(() => {
     if (clockTimeMs === null || dateWheelManuallySet) return;
@@ -2302,22 +2319,36 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     clockTimeMs === null
       ? 0
       : Math.floor((clockTimeMs % 60_000) / SECOND_HAND_TICK_MS) * SECOND_HAND_DEGREES_PER_TICK;
+  const smoothSecondsHandRotation = ((clockTimeMs % 60_000) / 60_000) * 360;
+  const displayedLiveSecondsHandRotation =
+    timeScale > 10 ? smoothSecondsHandRotation : secondsHandRotation;
   const minuteHandAngle =
     clockTime === null ? MINUTE_HAND_ANGLE_DEG : (clockTime.getMinutes() + secondsWithMilliseconds / 60) * 6;
   const hourHandAngle =
     clockTime === null
       ? HOUR_HAND_ANGLE_DEG
       : ((clockTime.getHours() % 12) + clockTime.getMinutes() / 60 + secondsWithMilliseconds / 3600) * 30;
-  const currentWeek = clockTime === null ? WEEK_HAND_REFERENCE_WEEK : isoWeekNumber(clockTime);
-  const weekHandAngle = WEEK_OFFSET_DEG + (currentWeek - 1) * WEEK_STEP_DEG;
-  const currentDay = clockTime === null ? DAY_HAND_REFERENCE_DAY : clockTime.getDay();
-  const dayHandAngle = DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + currentDay * DAY_SECTOR_STEP_DEG;
+  const continuousWeek =
+    clockTime === null
+      ? WEEK_HAND_REFERENCE_WEEK
+      : continuousIsoWeek(clockTime, calendarDayAnchorRef.current.isoWeekYear, WEEK_COUNT);
+  const weekHandAngle = WEEK_OFFSET_DEG + (continuousWeek - 1) * WEEK_STEP_DEG;
+  const continuousDayIndex =
+    clockTime === null
+      ? DAY_HAND_REFERENCE_DAY
+      : calendarDayAnchorRef.current.weekday +
+        localCalendarDayOrdinal(clockTime) -
+        calendarDayAnchorRef.current.ordinal;
+  const dayHandAngle =
+    DAY_SECTOR_OFFSET_DEG -
+    DAY_SECTOR_STEP_DEG / 2 +
+    continuousDayIndex * DAY_SECTOR_STEP_DEG;
   const liveHandAngles: Record<HandKey, number> = {
     week: weekHandAngle,
     day: dayHandAngle,
     hour: hourHandAngle,
     minute: minuteHandAngle,
-    second: secondsHandRotation,
+    second: displayedLiveSecondsHandRotation,
   };
   const effectiveHandAngle = (hand: HandKey) => manualHandAngles[hand] ?? liveHandAngles[hand];
   const selectedManualAngle = manualHandAngles[selectedHand];
@@ -2368,14 +2399,53 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   ];
   const mDots = minuteDots();
 
+  const simulatedTimeAt = (realTimeMs: number) => {
+    const anchor = clockAnchorRef.current;
+    return anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale;
+  };
+
+  const setTimeMultiplier = (multiplier: number) => {
+    const realTimeMs = Date.now();
+    const watchTimeMs = timeRunning ? simulatedTimeAt(realTimeMs) : clockTimeMs;
+    const nextScale = timeScale === multiplier ? 1 : multiplier;
+    clockAnchorRef.current = { realTimeMs, watchTimeMs };
+    setClockTimeMs(watchTimeMs);
+    setTimeScale(nextScale);
+  };
+
+  const resetTimeToNow = () => {
+    const now = Date.now();
+    const currentDate = new Date(now);
+    const currentDay = currentDate.getDate();
+    const currentIsoWeek = isoWeekCoordinates(currentDate);
+    clockAnchorRef.current = { realTimeMs: now, watchTimeMs: now };
+    calendarDayAnchorRef.current = {
+      isoWeekYear: currentIsoWeek.year,
+      ordinal: localCalendarDayOrdinal(currentDate),
+      weekday: currentDate.getDay(),
+    };
+    setClockTimeMs(now);
+    setManualHandAngles({});
+    setDateWheelManuallySet(false);
+    setDateWheelDay(currentDay);
+    setDateRingRotation(DATE_WHEEL_CALIBRATION.measuredAnglesDeg[currentDay - 1]);
+    setTimeRunning(true);
+  };
+
   const toggleTimeRunning = () => {
     if (timeRunning) {
+      const realTimeMs = Date.now();
+      const watchTimeMs = simulatedTimeAt(realTimeMs);
+      clockAnchorRef.current = { realTimeMs, watchTimeMs };
+      setClockTimeMs(watchTimeMs);
       setTimeRunning(false);
       return;
     }
 
-    setManualHandAngles({});
-    setClockTimeMs(Date.now());
+    clockAnchorRef.current = {
+      realTimeMs: Date.now(),
+      watchTimeMs: clockTimeMs,
+    };
     setTimeRunning(true);
   };
 
@@ -2385,8 +2455,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       delete nextAngles[selectedHand];
       return nextAngles;
     });
-    setClockTimeMs(Date.now());
-    setTimeRunning(true);
+    if (!timeRunning) {
+      clockAnchorRef.current = {
+        realTimeMs: Date.now(),
+        watchTimeMs: clockTimeMs,
+      };
+      setTimeRunning(true);
+    }
   };
 
   const advanceCalendarHand = (hand: "week" | "day", step: number) => {
@@ -2412,16 +2487,45 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
-      <button
-        type="button"
-        aria-pressed={uiVisible}
-        aria-label="Toggle interface controls"
-        title="Interface controls"
-        onClick={() => setUiVisible((visible) => !visible)}
-        className="fixed left-3 top-3 z-40 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-      >
-        ⚙️
-      </button>
+      <div className="fixed left-3 top-3 z-40 flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-pressed={uiVisible}
+          aria-label="Toggle interface controls"
+          title="Interface controls"
+          onClick={() => setUiVisible((visible) => !visible)}
+          className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          ⚙️
+        </button>
+        {[10, 100, 1000, 10_000, 100_000].map((multiplier) => {
+          const active = timeScale === multiplier;
+          return (
+            <button
+              key={multiplier}
+              type="button"
+              aria-pressed={active}
+              title={active ? "Return to real-time speed" : `Run time at ${multiplier}×`}
+              onClick={() => setTimeMultiplier(multiplier)}
+              className={`rounded-lg border-2 border-white/40 px-3 py-2 text-sm font-semibold shadow-lg transition active:scale-95 ${
+                active
+                  ? "bg-black text-white hover:bg-zinc-800"
+                  : "bg-white text-black hover:bg-zinc-100"
+              }`}
+            >
+              {multiplier.toLocaleString("en-US")}x
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          title="Reset the simulated watch to the current local time"
+          onClick={resetTimeToNow}
+          className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+        >
+          Now
+        </button>
+      </div>
 
       {uiVisible && (
         <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
