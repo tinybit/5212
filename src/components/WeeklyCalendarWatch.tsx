@@ -45,6 +45,10 @@ const DATE_WINDOW_CLIP_LEFT = 2017;
 const DATE_WINDOW_CLIP_TOP = 1264;
 const DATE_WINDOW_CLIP_RIGHT = 2181;
 const DATE_WINDOW_CLIP_BOTTOM = 1394;
+const DATE_WINDOW_OUTER_LEFT = 2010;
+const DATE_WINDOW_OUTER_TOP = 1256;
+const DATE_WINDOW_OUTER_RIGHT = 2188;
+const DATE_WINDOW_OUTER_BOTTOM = 1400;
 const WEEK_COUNT = 53;
 const WEEK_STEP_DEG = 360 / WEEK_COUNT;
 const WEEK_OFFSET_DEG = 6.5;
@@ -722,6 +726,13 @@ function isoWeekNumber(date: Date) {
 
 type Vec3 = { x: number; y: number; z: number };
 type LightDiskPosition = { u: number; v: number };
+type DateWindowLightSettings = {
+  softness: number;
+  castDistance: number;
+  castStrength: number;
+  wallStrength: number;
+  bevelStrength: number;
+};
 type MarkerMode = "flat" | "3d";
 
 const MARKER_PRISM_HEIGHT = 34;
@@ -961,16 +972,183 @@ function LitHourBaton({
   );
 }
 
-function HemisphereLightControl({
+function DateWindowLighting({
   brightness,
   position,
-  onBrightnessChange,
-  onChange,
+  settings,
 }: {
   brightness: number;
   position: LightDiskPosition;
+  settings: DateWindowLightSettings;
+}) {
+  const horizontalLength = Math.hypot(position.u, position.v) || 1;
+  const lightX = position.u / horizontalLength;
+  const lightY = position.v / horizontalLength;
+  const horizontalStrength = Math.min(1, horizontalLength);
+  const lightStrength = Math.min(1.1, 0.35 + brightness * 0.25);
+  const wallOpacity = (normalX: number, normalY: number) =>
+    settings.wallStrength *
+    (0.04 + Math.max(0, -(normalX * lightX + normalY * lightY)) * 0.32 * lightStrength);
+  const highlightOpacity = (normalX: number, normalY: number) =>
+    settings.wallStrength *
+    Math.max(0, normalX * lightX + normalY * lightY) *
+    0.13 *
+    lightStrength;
+  const castDistance = settings.castDistance * horizontalStrength;
+  const castOpacity = Math.min(
+    0.8,
+    0.32 * settings.castStrength * lightStrength * (0.4 + horizontalStrength * 0.6),
+  );
+  const shadowFramePath = [
+    `M ${DATE_WINDOW_CLIP_LEFT - 100} ${DATE_WINDOW_CLIP_TOP - 100}`,
+    `H ${DATE_WINDOW_CLIP_RIGHT + 100}`,
+    `V ${DATE_WINDOW_CLIP_BOTTOM + 100}`,
+    `H ${DATE_WINDOW_CLIP_LEFT - 100} Z`,
+    `M ${DATE_WINDOW_CLIP_LEFT} ${DATE_WINDOW_CLIP_TOP}`,
+    `H ${DATE_WINDOW_CLIP_RIGHT}`,
+    `V ${DATE_WINDOW_CLIP_BOTTOM}`,
+    `H ${DATE_WINDOW_CLIP_LEFT} Z`,
+  ].join(" ");
+  const points = (vertices: Array<[number, number]>) =>
+    vertices.map(([x, y]) => `${x},${y}`).join(" ");
+
+  const walls = [
+    {
+      key: "top",
+      normal: [0, 1] as const,
+      vertices: [
+        [DATE_WINDOW_OUTER_LEFT, DATE_WINDOW_OUTER_TOP],
+        [DATE_WINDOW_OUTER_RIGHT, DATE_WINDOW_OUTER_TOP],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_TOP],
+      ] as Array<[number, number]>,
+      innerEdge: [
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_TOP],
+      ] as Array<[number, number]>,
+    },
+    {
+      key: "right",
+      normal: [-1, 0] as const,
+      vertices: [
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_OUTER_RIGHT, DATE_WINDOW_OUTER_TOP],
+        [DATE_WINDOW_OUTER_RIGHT, DATE_WINDOW_OUTER_BOTTOM],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_BOTTOM],
+      ] as Array<[number, number]>,
+      innerEdge: [
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_BOTTOM],
+      ] as Array<[number, number]>,
+    },
+    {
+      key: "bottom",
+      normal: [0, -1] as const,
+      vertices: [
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_BOTTOM],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_BOTTOM],
+        [DATE_WINDOW_OUTER_RIGHT, DATE_WINDOW_OUTER_BOTTOM],
+        [DATE_WINDOW_OUTER_LEFT, DATE_WINDOW_OUTER_BOTTOM],
+      ] as Array<[number, number]>,
+      innerEdge: [
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_BOTTOM],
+        [DATE_WINDOW_CLIP_RIGHT, DATE_WINDOW_CLIP_BOTTOM],
+      ] as Array<[number, number]>,
+    },
+    {
+      key: "left",
+      normal: [1, 0] as const,
+      vertices: [
+        [DATE_WINDOW_OUTER_LEFT, DATE_WINDOW_OUTER_TOP],
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_BOTTOM],
+        [DATE_WINDOW_OUTER_LEFT, DATE_WINDOW_OUTER_BOTTOM],
+      ] as Array<[number, number]>,
+      innerEdge: [
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_TOP],
+        [DATE_WINDOW_CLIP_LEFT, DATE_WINDOW_CLIP_BOTTOM],
+      ] as Array<[number, number]>,
+    },
+  ];
+
+  return (
+    <g data-date-window-lighting>
+      <defs>
+        <clipPath id="date-window-opening-clip">
+          <rect
+            x={DATE_WINDOW_CLIP_LEFT}
+            y={DATE_WINDOW_CLIP_TOP}
+            width={DATE_WINDOW_CLIP_RIGHT - DATE_WINDOW_CLIP_LEFT}
+            height={DATE_WINDOW_CLIP_BOTTOM - DATE_WINDOW_CLIP_TOP}
+            rx={4}
+          />
+        </clipPath>
+        <filter
+          id="date-window-cast-shadow"
+          x={DATE_WINDOW_CLIP_LEFT - 100}
+          y={DATE_WINDOW_CLIP_TOP - 100}
+          width={DATE_WINDOW_CLIP_RIGHT - DATE_WINDOW_CLIP_LEFT + 200}
+          height={DATE_WINDOW_CLIP_BOTTOM - DATE_WINDOW_CLIP_TOP + 200}
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feGaussianBlur
+            in="SourceGraphic"
+            stdDeviation={settings.softness}
+            result="soft-shadow"
+          />
+          <feOffset
+            in="soft-shadow"
+            dx={-lightX * castDistance}
+            dy={-lightY * castDistance}
+          />
+        </filter>
+      </defs>
+
+      {walls.map((wall) => (
+        <g key={wall.key}>
+          <polygon
+            points={points(wall.vertices)}
+            fill="#171714"
+            opacity={wallOpacity(wall.normal[0], wall.normal[1])}
+          />
+          <polyline
+            points={points(wall.innerEdge)}
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={1.4}
+            opacity={highlightOpacity(wall.normal[0], wall.normal[1])}
+          />
+        </g>
+      ))}
+
+      <g clipPath="url(#date-window-opening-clip)">
+        <path
+          d={shadowFramePath}
+          fill="#000000"
+          fillRule="evenodd"
+          opacity={castOpacity}
+          filter="url(#date-window-cast-shadow)"
+        />
+      </g>
+    </g>
+  );
+}
+
+function HemisphereLightControl({
+  brightness,
+  dateWindowLight,
+  position,
+  onBrightnessChange,
+  onChange,
+  onDateWindowLightChange,
+}: {
+  brightness: number;
+  dateWindowLight: DateWindowLightSettings;
+  position: LightDiskPosition;
   onBrightnessChange: (brightness: number) => void;
   onChange: (position: LightDiskPosition) => void;
+  onDateWindowLightChange: (settings: DateWindowLightSettings) => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const diskRef = useRef<HTMLDivElement>(null);
@@ -979,6 +1157,55 @@ function HemisphereLightControl({
   const radius = Math.hypot(position.u, position.v);
   const elevation = (Math.asin(Math.sqrt(Math.max(0, 1 - radius * radius))) * 180) / Math.PI;
   const azimuth = (Math.atan2(position.u, -position.v) * 180) / Math.PI;
+  const dateWindowControls: Array<{
+    key: keyof DateWindowLightSettings;
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    valueText: string;
+  }> = [
+    {
+      key: "softness",
+      label: "Softness",
+      min: 0,
+      max: 20,
+      step: 0.1,
+      valueText: `${dateWindowLight.softness.toFixed(1)}px`,
+    },
+    {
+      key: "castDistance",
+      label: "Depth",
+      min: 0,
+      max: 30,
+      step: 0.1,
+      valueText: `${dateWindowLight.castDistance.toFixed(1)}px`,
+    },
+    {
+      key: "castStrength",
+      label: "Cast shadow",
+      min: 0,
+      max: 2,
+      step: 0.01,
+      valueText: `${Math.round(dateWindowLight.castStrength * 100)}%`,
+    },
+    {
+      key: "wallStrength",
+      label: "Wall shade",
+      min: 0,
+      max: 2,
+      step: 0.01,
+      valueText: `${Math.round(dateWindowLight.wallStrength * 100)}%`,
+    },
+    {
+      key: "bevelStrength",
+      label: "Photo bevel",
+      min: 0,
+      max: 2,
+      step: 0.01,
+      valueText: `${Math.round(dateWindowLight.bevelStrength * 100)}%`,
+    },
+  ];
 
   const clampPosition = (u: number, v: number) => {
     const distance = Math.hypot(u, v);
@@ -1012,7 +1239,7 @@ function HemisphereLightControl({
   return (
     <div
       ref={panelRef}
-      className="fixed left-32 top-1/2 z-[100] rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
+      className="fixed left-32 top-1/2 z-[100] w-48 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
       style={{
         transform: `translate(${panelOffset.x}px, calc(-50% + ${panelOffset.y}px))`,
       }}
@@ -1089,7 +1316,7 @@ function HemisphereLightControl({
           event.preventDefault();
           onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
         }}
-        className="relative h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black"
+        className="relative mx-auto h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black"
       >
         <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" />
         <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" />
@@ -1117,6 +1344,35 @@ function HemisphereLightControl({
           aria-label="Marker light brightness"
         />
       </label>
+      <div className="mt-3 border-t border-black/15 pt-2">
+        <div className="mb-1 text-[10px] font-bold text-black">Date window</div>
+        {dateWindowControls.map((control) => (
+          <label
+            key={control.key}
+            className="mt-1.5 block text-[10px] font-semibold text-black"
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span>{control.label}</span>
+              <output className="tabular-nums">{control.valueText}</output>
+            </span>
+            <input
+              type="range"
+              min={control.min}
+              max={control.max}
+              step={control.step}
+              value={dateWindowLight[control.key]}
+              onChange={(event) =>
+                onDateWindowLightChange({
+                  ...dateWindowLight,
+                  [control.key]: Number(event.target.value),
+                })
+              }
+              className="mt-0.5 w-full cursor-pointer accent-black"
+              aria-label={`Date window ${control.label.toLowerCase()}`}
+            />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1450,10 +1706,18 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const [markerMode, setMarkerMode] = useState<MarkerMode>("3d");
   const [uiVisible, setUiVisible] = useState(false);
   const [lightDiskPosition, setLightDiskPosition] = useState<LightDiskPosition>({
-    u: -0.4466,
-    v: -0.6621,
+    u: -0.6664,
+    v: -0.3543,
   });
   const [markerLightBrightness, setMarkerLightBrightness] = useState(1.92);
+  const [dateWindowLightSettings, setDateWindowLightSettings] =
+    useState<DateWindowLightSettings>({
+      softness: 12.9,
+      castDistance: 18.3,
+      castStrength: 1.11,
+      wallStrength: 1.21,
+      bevelStrength: 0.63,
+    });
   const [dateRingRotation, setDateRingRotation] = useState<number>(
     DATE_WHEEL_CALIBRATION.dayOneAngleDeg,
   );
@@ -1754,9 +2018,11 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       {uiVisible && (
         <HemisphereLightControl
           brightness={markerLightBrightness}
+          dateWindowLight={dateWindowLightSettings}
           position={lightDiskPosition}
           onBrightnessChange={setMarkerLightBrightness}
           onChange={setLightDiskPosition}
+          onDateWindowLightChange={setDateWindowLightSettings}
         />
       )}
 
@@ -1982,9 +2248,24 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               top: `${(SHADOW_CROP_Y / IMG_H) * 100}%`,
               width: `${(SHADOW_CROP_WIDTH / IMG_W) * 100}%`,
               height: `${(SHADOW_CROP_HEIGHT / IMG_H) * 100}%`,
-              opacity: photoOpacity,
+              opacity: photoOpacity * dateWindowLightSettings.bevelStrength,
             }}
           />
+        )}
+
+        {referenceIdx === 1 && (
+          <svg
+            className="pointer-events-none absolute inset-0 z-[35] h-full w-full"
+            viewBox={`0 0 ${IMG_W} ${IMG_H}`}
+            preserveAspectRatio="xMidYMid meet"
+            aria-hidden
+          >
+            <DateWindowLighting
+              brightness={markerLightBrightness}
+              position={lightDiskPosition}
+              settings={dateWindowLightSettings}
+            />
+          </svg>
         )}
 
         <svg

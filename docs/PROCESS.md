@@ -201,6 +201,8 @@ light z = sqrt(1 - u² - v²) × radius
 
 Each opaque metallic facet combines ambient light, Lambertian diffuse response, inverse-distance attenuation, and a Blinn–Phong specular term. Normals and facet centers rotate with each marker, so the same light position produces different shading around the dial.
 
+The date aperture consumes the same hemisphere position and brightness. Its four inset walls shade independently from their inward-facing normals, while a clipped soft cast shadow moves across the date wheel opposite the light direction. This dynamic layer sits above the extracted photographic bevel and below the hands.
+
 ### Placement rules
 
 - Single batons at hours **1, 2, 4, 5, 6, 7, 8, 9, 10, 11**.
