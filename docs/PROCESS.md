@@ -23,6 +23,29 @@ This document captures the calibrated geometry, typography, hands, motion, and d
 | `attachments/202415-51887.jpg` → `public/reference-ortho.jpg` | **Orthographic baseline**. 2911 × 2683 px. All measurements are relative to this image. |
 | `public/reference-ortho-cream.jpg` | Working reference with the exterior converted to dial cream. Used by the live component. |
 | `public/reference-handless.png` | Dial-only reference, aligned to the same 2911 × 2683 canvas and center as the working reference. |
+| `public/reference-handless-date-cutout.png` | Reference 2 with the measured rounded date aperture removed to alpha. |
+| `public/date-ring-overlay.png` | Supplied movement photograph reduced to an opaque annulus containing only the white 1–31 date wheel. It renders beneath Reference 2 at the calibrated radius and offset. |
+| `public/date-window-shadow.png` | Original date-aperture bevel and edge gradient extracted as a transparent frame and rendered above the wheel. |
+
+`scripts/create_date_window_layers.py` regenerates the cutout and shadow assets from `reference-handless.png`. The compositing order is date wheel → cutout dial → extracted aperture shadow → hands/guides. The wheel also has its own aperture clip inset by one source pixel from the visible opening, preventing numeral bleed above or below the frame at fractional browser zoom levels.
+
+Date-wheel calibration is stored in `DATE_WHEEL_CALIBRATION`. Because the photographed wheel is not perfectly uniform, final navigation will use per-date measured angles rather than a constant increment. Measurements recorded so far:
+
+```text
+Day:    1     2      3      4      5      6      7      8
+Angle: 86.3  97.8  109.8  121.8  133.8  145.3  156.9  168.8
+
+Day:    9      10     11     12     13     14     15     16
+Angle: 180.8  192.5  204.0  215.5  227.2  238.7  250.1  261.8
+
+Day:    17     18     19     20     21     22     23     24
+Angle: 273.0  284.7  296.0  307.5  319.0  330.4  341.9  353.5
+
+Day:    25    26    27    28    29    30    31
+Angle:  4.9  16.6  28.0  39.7  51.4  62.9  74.5
+```
+
+The wheel initializes to the measured day-1 angle, `86.3°`. **Date +1** now targets this complete per-date lookup table instead of applying a uniform increment. Targets remain unwrapped across 360° so the transition from day 24 (`353.5°`) to day 25 (`4.9°`) continues clockwise.
 
 ### Why the photo is imperfect
 
@@ -201,7 +224,7 @@ function hourAngleDeg(h: number) {
 
 ## 8. UI controls
 
-Controls live in three rows under the dial.
+Controls live in four rows under the dial.
 
 Row 1:
 
@@ -224,11 +247,13 @@ Row 2 contains independent `ON/OFF` controls for:
 - **Minute**
 - **Second**
 
-Row 3 contains **Markers: Flat / 3D**, **⚙️**, **Week +1**, and **Day +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets, while 3D shows the opaque physically lit prisms. The persistent **⚙️** button shows or hides every other interface control; controls are hidden by default. The calendar controls advance their hand by one sector, store the result as a manual angle override, and select that hand so **Live** can return it to the current calendar position. Calendar advances use a 650ms ease-out transform and retain unwrapped angles so crossing 360° continues clockwise.
+Row 3 contains **Markers: Flat / 3D**, **Week +1**, **Day +1**, and **Date +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets, while 3D shows the opaque physically lit prisms. The persistent top-left **⚙️** button shows or hides every other interface control; controls are hidden by default. The calendar-hand controls advance their hand by one sector, store the result as a manual angle override, and select that hand so **Live** can return it to the current calendar position. Week, weekday, and date advances share the same short 180ms mechanical snap. **Date +1** targets the next measured per-date angle. Calendar hands and the date wheel retain unwrapped angles so crossing 360° continues clockwise.
+
+Row 4 contains a live `X/Y` offset readout plus **X−**, **X+**, **Y−**, **Y+**, and **Capture angle**. Each offset click moves the rotating date-ring layer by one rendered pixel in the named direction. **Capture angle** appends the current wheel rotation, rounded to 0.1°, to a numbered on-screen list with a **Clear** action. The calibrated defaults are radius `826.868626px`, `X −3px`, and `Y +1px`.
 
 All controls are client state inside `WeeklyCalendarWatch`.
 
-A fixed hand selector and vertical `0–360°` slider can manually override any hand angle. **Live** clears the selected hand override. **Pause** freezes live clock/calendar state; **Continue** clears manual overrides and resumes from the current time.
+A fixed hand selector and right-side vertical `0–360°` slider can manually override any hand angle. Two left-side vertical sliders rotate the transparent date-ring overlay through `0–360°` and resize its radius from `600–1050px`; the size control shows its current radius. **Live** clears the selected hand override. **Pause** freezes live clock/calendar state; **Continue** clears manual overrides and resumes from the current time.
 
 In 3D marker mode, the left-side light panel can be dragged by its header. Its hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. Position and brightness update all marker facet colors immediately.
 

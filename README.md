@@ -23,6 +23,7 @@ Implemented and calibrated:
 - Local-time hour and minute positioning.
 - Mechanical seconds motion at eight steps per second, matching the 4 Hz / 28,800 semi-oscillations-per-hour caliber 26-330 S C J SE.
 - Current ISO week and local weekday indication.
+- An aligned 1–31 date wheel isolated from the supplied movement photograph and composited beneath a transparent Reference 2 aperture with its original bevel shadow.
 
 Not implemented yet:
 
@@ -46,17 +47,18 @@ npx eslint src/components/WeeklyCalendarWatch.tsx
 
 ## Controls
 
-The dial controls are arranged in three rows:
+The dial controls are arranged in four rows:
 
 1. `Photo`, `Reference`, `Drawing`, `Text`, `Guides`, `Hands`
 2. `Week`, `Day`, `Hour`, `Minute`, `Second`
-3. `Markers: Flat / 3D`, `⚙️`, `Week +1`, `Day +1`
+3. `Markers: Flat / 3D`, `Week +1`, `Day +1`, `Date +1`
+4. `X−`, `X+`, `Y−`, `Y+` date-ring center offsets and `Capture angle`
 
-`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer. The third row switches between the original flat calibration markers and opaque, physically lit 3D markers, and advances the calendar hands for manual adjustment.
+`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer. The third row switches between the original flat calibration markers and advances the week, weekday, and date displays. The fourth row moves the rotating date-ring center by one rendered pixel per click and records the current wheel angle in an on-screen list.
 
 The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and interface controls hidden. The persistent `⚙️` button shows or hides all controls.
 
-The fixed controls above and beside the dial select any hand, rotate it through 360°, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle. In 3D marker mode, the movable left-side panel positions a point light on a hemisphere and controls its brightness; changes update diffuse and metallic specular shading independently on every marker facet.
+The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue live time, and return a manually positioned hand to its live clock/calendar angle. In 3D marker mode, the movable light panel positions a point light on a hemisphere and controls its brightness; changes update diffuse and metallic specular shading independently on every marker facet.
 
 ## Key files
 
@@ -67,6 +69,10 @@ The fixed controls above and beside the dial select any hand, rotate it through 
 - `public/reference-ortho.jpg` — original orthographic baseline.
 - `public/reference-ortho-cream.jpg` — working reference with the exterior changed to dial cream.
 - `public/reference-handless.png` — aligned dial-only reference on the same cream canvas.
+- `public/date-ring-overlay.png` — transparent annular crop containing only the supplied date numerals and ring.
+- `public/reference-handless-date-cutout.png` — Reference 2 with a measured transparent date aperture.
+- `public/date-window-shadow.png` — extracted aperture bevel and inner-edge shadow rendered above the wheel.
+- `scripts/create_date_window_layers.py` — reproducibly generates the cutout and shadow assets.
 - `docs/PROCESS.md` — measurement conventions, locked constants, rendering details, and implementation history.
 
 ## Coordinate system

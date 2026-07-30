@@ -22,6 +22,29 @@ const MINUTE_DOT_RADIUS = 9;
 const R_WEEK_IN = 826;
 const R_WEEK_OUT = 928;
 const R_DIAL_EDGE = 1030;
+const DATE_RING_DEFAULT_RADIUS = 826.868626390606;
+const DATE_RING_OPACITY = 1;
+const DATE_WHEEL_CALIBRATION = {
+  dayCount: 31,
+  initialDay: 1,
+  measuredStepDeg: 11.64,
+  idealStepDeg: 360 / 31,
+  dayOneAngleDeg: 86.3,
+  measuredAnglesDeg: [
+    86.3, 97.8, 109.8, 121.8, 133.8, 145.3, 156.9, 168.8,
+    180.8, 192.5, 204.0, 215.5, 227.2, 238.7, 250.1, 261.8,
+    273.0, 284.7, 296.0, 307.5, 319.0, 330.4, 341.9, 353.5,
+    4.9, 16.6, 28.0, 39.7, 51.4, 62.9, 74.5,
+  ],
+} as const;
+const SHADOW_CROP_X = 1999;
+const SHADOW_CROP_Y = 1245;
+const SHADOW_CROP_WIDTH = 200;
+const SHADOW_CROP_HEIGHT = 165;
+const DATE_WINDOW_CLIP_LEFT = 2017;
+const DATE_WINDOW_CLIP_TOP = 1264;
+const DATE_WINDOW_CLIP_RIGHT = 2181;
+const DATE_WINDOW_CLIP_BOTTOM = 1394;
 const WEEK_COUNT = 53;
 const WEEK_STEP_DEG = 360 / WEEK_COUNT;
 const WEEK_OFFSET_DEG = 6.5;
@@ -448,7 +471,7 @@ const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
 const REFERENCE_IMAGES = [
   { src: "/reference-ortho-cream.jpg", label: "Reference: 1" },
-  { src: "/reference-handless.png", label: "Reference: 2" },
+  { src: "/reference-handless-date-cutout.png", label: "Reference: 2" },
 ] as const;
 
 type Props = {
@@ -989,7 +1012,7 @@ function HemisphereLightControl({
   return (
     <div
       ref={panelRef}
-      className="fixed left-3 top-1/2 z-30 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
+      className="fixed left-32 top-1/2 z-[100] rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
       style={{
         transform: `translate(${panelOffset.x}px, calc(-50% + ${panelOffset.y}px))`,
       }}
@@ -1119,7 +1142,7 @@ function WeekIndicatorHand({ rotation }: { rotation: number }) {
       style={{
         transform: `rotate(${rotation}deg)`,
         transformOrigin: `${CX}px ${CY}px`,
-        transition: "transform 650ms cubic-bezier(0.22, 1, 0.36, 1)",
+        transition: "transform 180ms cubic-bezier(0.2, 0.85, 0.25, 1)",
         willChange: "transform",
       }}
     >
@@ -1188,7 +1211,7 @@ function DayIndicatorHand({ rotation }: { rotation: number }) {
       style={{
         transform: `rotate(${rotation}deg)`,
         transformOrigin: `${CX}px ${CY}px`,
-        transition: "transform 650ms cubic-bezier(0.22, 1, 0.36, 1)",
+        transition: "transform 180ms cubic-bezier(0.2, 0.85, 0.25, 1)",
         willChange: "transform",
       }}
     >
@@ -1431,6 +1454,15 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     v: -0.6621,
   });
   const [markerLightBrightness, setMarkerLightBrightness] = useState(1.92);
+  const [dateRingRotation, setDateRingRotation] = useState<number>(
+    DATE_WHEEL_CALIBRATION.dayOneAngleDeg,
+  );
+  const [dateWheelDay, setDateWheelDay] = useState<number>(
+    DATE_WHEEL_CALIBRATION.initialDay,
+  );
+  const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
+  const [dateRingOffset, setDateRingOffset] = useState({ x: -3, y: 1 });
+  const [capturedDateRingAngles, setCapturedDateRingAngles] = useState<number[]>([]);
   const [weekHandVisible, setWeekHandVisible] = useState(true);
   const [dayHandVisible, setDayHandVisible] = useState(true);
   const [hourHandVisible, setHourHandVisible] = useState(true);
@@ -1488,6 +1520,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     selectedManualAngle !== undefined && selectedManualAngle >= 0 && selectedManualAngle <= 360
       ? selectedManualAngle
       : ((effectiveHandAngle(selectedHand) % 360) + 360) % 360;
+  const dateRingSliderAngle = ((dateRingRotation % 360) + 360) % 360;
   const weekHandRotation = effectiveHandAngle("week") - WEEK_HAND_ANGLE_DEG;
   const dayHandRotation = effectiveHandAngle("day") - DAY_HAND_ANGLE_DEG;
   const hourHandRotation = effectiveHandAngle("hour") - HOUR_HAND_ANGLE_DEG;
@@ -1559,6 +1592,18 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     setSelectedHand(hand);
   };
 
+  const advanceDateWheel = () => {
+    const nextDay = (dateWheelDay % DATE_WHEEL_CALIBRATION.dayCount) + 1;
+    const measuredTarget = DATE_WHEEL_CALIBRATION.measuredAnglesDeg[nextDay - 1];
+    setDateRingRotation((angle) => {
+      const completedTurns = Math.floor(angle / 360);
+      let unwrappedTarget = completedTurns * 360 + measuredTarget;
+      if (unwrappedTarget <= angle) unwrappedTarget += 360;
+      return unwrappedTarget;
+    });
+    setDateWheelDay(nextDay);
+  };
+
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
       <button
@@ -1611,6 +1656,80 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         </div>
       )}
 
+      {uiVisible && capturedDateRingAngles.length > 0 && (
+        <aside className="fixed right-20 top-3 z-30 w-44 rounded-xl border border-black/20 bg-white/90 p-3 text-black shadow-lg backdrop-blur">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold">Date angles</h2>
+            <button
+              type="button"
+              onClick={() => setCapturedDateRingAngles([])}
+              className="text-[10px] font-semibold text-black/60 hover:text-black"
+            >
+              Clear
+            </button>
+          </div>
+          <ol className="max-h-40 space-y-1 overflow-y-auto text-xs tabular-nums">
+            {capturedDateRingAngles.map((angle, index) => (
+              <li key={`${index}-${angle}`} className="flex justify-between gap-2">
+                <span className="text-black/50">#{index + 1}</span>
+                <span>{angle.toFixed(1)}°</span>
+              </li>
+            ))}
+          </ol>
+        </aside>
+      )}
+
+      {uiVisible && (
+        <div className="fixed bottom-3 left-3 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
+          <span className="text-xs font-semibold tabular-nums text-black">0°</span>
+          <input
+            type="range"
+            min={0}
+            max={360}
+            step={0.1}
+            value={dateRingSliderAngle}
+            aria-label="Rotate date ring"
+            onChange={(event) => {
+              const angle = Number(event.target.value);
+              let closestDay = 1;
+              let closestDistance = Number.POSITIVE_INFINITY;
+              DATE_WHEEL_CALIBRATION.measuredAnglesDeg.forEach((measuredAngle, index) => {
+                const distance = Math.abs(((angle - measuredAngle + 540) % 360) - 180);
+                if (distance < closestDistance) {
+                  closestDistance = distance;
+                  closestDay = index + 1;
+                }
+              });
+              setDateRingRotation(angle);
+              setDateWheelDay(closestDay);
+            }}
+            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
+            style={{ writingMode: "vertical-lr" }}
+          />
+          <span className="text-xs font-semibold tabular-nums text-black">360°</span>
+        </div>
+      )}
+
+      {uiVisible && (
+        <div className="fixed bottom-3 left-16 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
+          <output className="text-[10px] font-semibold tabular-nums text-black">
+            {Math.round(dateRingRadius)}px
+          </output>
+          <input
+            type="range"
+            min={600}
+            max={1050}
+            step="any"
+            value={dateRingRadius}
+            aria-label="Resize date ring"
+            onChange={(event) => setDateRingRadius(Number(event.target.value))}
+            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
+            style={{ writingMode: "vertical-lr" }}
+          />
+          <span className="text-[10px] font-semibold text-black">Size</span>
+        </div>
+      )}
+
       {uiVisible && (
         <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
         <span className="text-xs font-semibold tabular-nums text-black">0°</span>
@@ -1642,15 +1761,44 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       )}
 
       <div className="relative w-full">
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            clipPath: `inset(
+              ${(DATE_WINDOW_CLIP_TOP / IMG_H) * 100}%
+              ${((IMG_W - DATE_WINDOW_CLIP_RIGHT) / IMG_W) * 100}%
+              ${((IMG_H - DATE_WINDOW_CLIP_BOTTOM) / IMG_H) * 100}%
+              ${(DATE_WINDOW_CLIP_LEFT / IMG_W) * 100}%
+              round 1px
+            )`,
+          }}
+        >
+          <img
+            src="/date-ring-overlay.png"
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="absolute select-none transition-transform duration-[180ms] ease-[cubic-bezier(0.2,0.85,0.25,1)]"
+            style={{
+              left: `calc(${((CX - dateRingRadius) / IMG_W) * 100}% + ${dateRingOffset.x}px)`,
+              top: `calc(${((CY - dateRingRadius) / IMG_H) * 100}% + ${dateRingOffset.y}px)`,
+              width: `${((dateRingRadius * 2) / IMG_W) * 100}%`,
+              height: `${((dateRingRadius * 2) / IMG_H) * 100}%`,
+              opacity: DATE_RING_OPACITY,
+              transform: `rotate(${dateRingRotation}deg)`,
+            }}
+          />
+        </div>
+
         <img
           src={referenceImage.src}
           alt={`${referenceImage.label} weekly calendar dial`}
-          className="block h-auto w-full select-none transition-opacity duration-200"
+          className="relative z-10 block h-auto w-full select-none transition-opacity duration-200"
           style={{ opacity: photoOpacity }}
           draggable={false}
         />
         <svg
-          className="pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200"
+          className="pointer-events-none absolute inset-0 z-20 h-full w-full transition-opacity duration-200"
           viewBox={`0 0 ${IMG_W} ${IMG_H}`}
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
@@ -1820,6 +1968,31 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
           <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
           </g>
+        </svg>
+
+        {referenceIdx === 1 && (
+          <img
+            src="/date-window-shadow.png?v=2"
+            alt=""
+            aria-hidden
+            draggable={false}
+            className="pointer-events-none absolute z-30 select-none transition-opacity duration-200"
+            style={{
+              left: `${(SHADOW_CROP_X / IMG_W) * 100}%`,
+              top: `${(SHADOW_CROP_Y / IMG_H) * 100}%`,
+              width: `${(SHADOW_CROP_WIDTH / IMG_W) * 100}%`,
+              height: `${(SHADOW_CROP_HEIGHT / IMG_H) * 100}%`,
+              opacity: photoOpacity,
+            }}
+          />
+        )}
+
+        <svg
+          className="pointer-events-none absolute inset-0 z-40 h-full w-full"
+          viewBox={`0 0 ${IMG_W} ${IMG_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden
+        >
           <g
             className="transition-opacity duration-200"
             style={{ opacity: handsVisible ? 1 : 0 }}
@@ -1828,13 +2001,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             {weekHandVisible && <WeekIndicatorHand rotation={weekHandRotation} />}
             {hourHandVisible && <HourHand rotation={hourHandRotation} />}
             {minuteHandVisible && <MinuteHand rotation={minuteHandRotation} />}
-              {secondsHandVisible && <SecondsHand rotation={displayedSecondsHandRotation} />}
+            {secondsHandVisible && <SecondsHand rotation={displayedSecondsHandRotation} />}
           </g>
         </svg>
 
         {/* Calibrated center guides for every week digit, month letter, and day letter. */}
         <svg
-          className="pointer-events-none absolute inset-0 h-full w-full"
+          className="pointer-events-none absolute inset-0 z-50 h-full w-full"
           viewBox={`0 0 ${IMG_W} ${IMG_H}`}
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
@@ -2001,7 +2174,60 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               >
                 Day +1
               </button>
+              <button
+                type="button"
+                onClick={advanceDateWheel}
+                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                Date +1
+              </button>
             </>
+          </div>
+        )}
+        {uiVisible && (
+          <div className="flex items-center justify-center gap-2">
+            <output
+              className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold tabular-nums text-black shadow-lg"
+              aria-label={`Date ring center offset X ${dateRingOffset.x} pixels, Y ${dateRingOffset.y} pixels`}
+            >
+              X {dateRingOffset.x >= 0 ? "+" : ""}
+              {dateRingOffset.x}px · Y {dateRingOffset.y >= 0 ? "+" : ""}
+              {dateRingOffset.y}px
+            </output>
+            {[
+              { label: "X−", axis: "x" as const, delta: -1, description: "Move date ring left 1 pixel" },
+              { label: "X+", axis: "x" as const, delta: 1, description: "Move date ring right 1 pixel" },
+              { label: "Y−", axis: "y" as const, delta: -1, description: "Move date ring up 1 pixel" },
+              { label: "Y+", axis: "y" as const, delta: 1, description: "Move date ring down 1 pixel" },
+            ].map(({ label, axis, delta, description }) => (
+              <button
+                key={label}
+                type="button"
+                aria-label={description}
+                title={description}
+                onClick={() =>
+                  setDateRingOffset((offset) => ({
+                    ...offset,
+                    [axis]: offset[axis] + delta,
+                  }))
+                }
+                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setCapturedDateRingAngles((angles) => [
+                  ...angles,
+                  Math.round(dateRingRotation * 10) / 10,
+                ])
+              }
+              className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+            >
+              Capture angle
+            </button>
           </div>
         )}
       </div>
