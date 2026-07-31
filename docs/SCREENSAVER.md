@@ -90,3 +90,7 @@ Confirm that `npm run build:screensaver` completed successfully and reinstall th
 ### The seconds hand skips beats
 
 Install the latest native bundle rather than opening `dist-screensaver/index.html` directly. The native wrapper drives the eight-beat-per-second hand from `ScreenSaverView` because macOS can throttle JavaScript timers in the screensaver host.
+
+### An external display has a large black border
+
+Install the latest bundle and restart `legacyScreenSaver`. The wrapper sizes its web view in the parent `ScreenSaverView` coordinate space; mixing those bounds with `NSScreen` logical points causes half-size rendering when an external display reports backing-pixel bounds.

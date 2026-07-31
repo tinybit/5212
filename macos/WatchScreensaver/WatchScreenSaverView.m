@@ -83,24 +83,21 @@
   if (self.bounds.size.width > 1 && self.bounds.size.height > 1) {
     return;
   }
-  NSSize size = NSScreen.mainScreen.frame.size;
+  NSScreen *screen = self.window.screen ?: NSScreen.mainScreen;
+  NSSize size = screen.frame.size;
   if (size.width > 1 && size.height > 1) {
     [self setFrameSize:size];
   }
 }
 
 - (NSRect)webViewTargetFrame {
-  if (self.previewMode && self.bounds.size.width > 1 && self.bounds.size.height > 1) {
+  if (self.bounds.size.width > 1 && self.bounds.size.height > 1) {
     return self.bounds;
   }
 
   NSScreen *screen = self.window.screen ?: NSScreen.mainScreen;
   NSSize screenSize = screen.frame.size;
   if (screenSize.width > 1 && screenSize.height > 1) {
-    if (self.bounds.size.width > 1 && self.bounds.size.height > 1) {
-      return NSMakeRect(0, 0, MIN(self.bounds.size.width, screenSize.width),
-                        MIN(self.bounds.size.height, screenSize.height));
-    }
     return NSMakeRect(0, 0, screenSize.width, screenSize.height);
   }
   return self.bounds;
