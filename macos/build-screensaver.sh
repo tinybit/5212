@@ -38,3 +38,4 @@ plutil -lint "$CONTENTS/Info.plist"
 
 echo "Built: $BUNDLE"
 echo "Install: open \"$BUNDLE\""
+echo "Tahoe reload: quit System Settings, then run: killall legacyScreenSaver 2>/dev/null || true"

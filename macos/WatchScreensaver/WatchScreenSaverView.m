@@ -37,17 +37,16 @@
 
 - (void)startAnimation {
   [super startAnimation];
-  if (self.previewMode) {
-    return;
+  if (!self.previewMode) {
+    [self ensureFullSize];
   }
-  [self ensureFullSize];
   [self installWebView];
   [self updateWebViewFrame];
 }
 
 - (void)stopAnimation {
-  [self teardownWebView];
   [super stopAnimation];
+  [self reconcileAfterStop];
 }
 
 - (void)teardownWebView {
@@ -58,7 +57,26 @@
 }
 
 - (void)screensaverWillStop:(NSNotification *)notification {
-  [self teardownWebView];
+  [self reconcileAfterStop];
+}
+
+- (void)reconcileAfterStop {
+  __weak typeof(self) weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+                   WatchScreenSaverView *strongSelf = weakSelf;
+                   if (!strongSelf || !strongSelf.webView) {
+                     return;
+                   }
+
+                   BOOL windowIsVisible =
+                       strongSelf.window != nil && strongSelf.window.isVisible;
+                   if (windowIsVisible) {
+                     [strongSelf startAnimation];
+                   } else {
+                     [strongSelf teardownWebView];
+                   }
+                 });
 }
 
 - (void)ensureFullSize {

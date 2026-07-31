@@ -46,6 +46,14 @@ macOS opens the screen-saver installer. Approve replacing the existing copy when
 
 After changing the simulator or native wrapper, rebuild and repeat the `open` command. macOS installs the bundle; it does not automatically follow later changes in the repository.
 
+On macOS 26, quit System Settings and restart its legacy screensaver host after replacing an installed build:
+
+```bash
+killall legacyScreenSaver 2>/dev/null || true
+```
+
+The host memory-maps the native bundle and can continue running old code after installation. Reopen System Settings after this command.
+
 ## Verification
 
 Before installing a new build:
@@ -73,7 +81,7 @@ The normal web application and screensaver share the watch rendering components 
 
 ### The old version still appears
 
-Rebuild, run the absolute `open` command again, and approve replacement. Close and reopen System Settings if its preview cached the previous bundle.
+Rebuild, run the absolute `open` command again, and approve replacement. Quit System Settings, run `killall legacyScreenSaver 2>/dev/null || true`, and reopen System Settings.
 
 ### The screen is blank or white
 
