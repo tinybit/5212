@@ -56,15 +56,12 @@ const DATE_WHEEL_CALIBRATION = {
   idealStepDeg: 360 / 31,
   dayOneAngleDeg: 86.3,
   measuredAnglesDeg: [
-    86.3, 97.8, 109.8, 121.8, 133.8, 145.3, 156.9, 168.8,
-    180.8, 192.5, 204.0, 215.5, 227.2, 238.7, 250.1, 261.8,
-    273.0, 284.7, 296.0, 307.5, 319.0, 330.4, 341.9, 353.5,
-    4.9, 16.6, 28.0, 39.7, 51.4, 62.9, 74.5,
+    86.3, 97.8, 109.8, 121.8, 133.8, 145.3, 156.9, 168.8, 180.8, 192.5, 204.0, 215.5, 227.2, 238.7,
+    250.1, 261.8, 273.0, 284.7, 296.0, 307.5, 319.0, 330.4, 341.9, 353.5, 4.9, 16.6, 28.0, 39.7,
+    51.4, 62.9, 74.5,
   ],
 } as const;
-const DATE_WHEEL_UNWRAPPED_ANGLES = unwrapCyclicAngles(
-  DATE_WHEEL_CALIBRATION.measuredAnglesDeg,
-);
+const DATE_WHEEL_UNWRAPPED_ANGLES = unwrapCyclicAngles(DATE_WHEEL_CALIBRATION.measuredAnglesDeg);
 const SHADOW_CROP_X = 1999;
 const SHADOW_CROP_Y = 1245;
 const SHADOW_CROP_WIDTH = 200;
@@ -134,8 +131,20 @@ const WEEK_HAND_HEAD_HALF_THICKNESS = 11.7;
 const SINGLE_BATON_HOURS = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 
 const MINUTE_SKIP = new Set<number>([
-  4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59,
-  13, 15, // date window neighbors
+  4,
+  9,
+  14,
+  19,
+  24,
+  29,
+  34,
+  39,
+  44,
+  49,
+  54,
+  59,
+  13,
+  15, // date window neighbors
 ]);
 
 const MAGENTA = "#000000";
@@ -503,13 +512,15 @@ const R_DAY_GLYPH_GUIDE = averageDayGlyphRadius();
 
 const PHOTO_OPACITY = [1, 0.5, 0] as const;
 const PHOTO_LABEL = ["Photo: 100%", "Photo: 50%", "Photo: OFF"] as const;
+const publicAsset = (fileName: string) => `${import.meta.env.BASE_URL}${fileName}`;
 const REFERENCE_IMAGES = [
-  { src: "/reference-ortho-cream.jpg", label: "Reference: 1" },
-  { src: "/reference-handless-date-cutout.png", label: "Reference: 2" },
+  { src: publicAsset("reference-ortho-cream.jpg"), label: "Reference: 1" },
+  { src: publicAsset("reference-handless-date-cutout.png"), label: "Reference: 2" },
 ] as const;
 
 type Props = {
   className?: string;
+  screensaver?: boolean;
 };
 
 type HandKey = "week" | "day" | "hour" | "minute" | "second";
@@ -553,9 +564,7 @@ function monthSectorLines() {
 function daySectorLines() {
   const lines = [];
   for (let k = 0; k < 7; k++) {
-    lines.push(
-      polarLine(DAY_SECTOR_OFFSET_DEG + k * DAY_SECTOR_STEP_DEG, R_DAY_IN, R_DAY_OUT),
-    );
+    lines.push(polarLine(DAY_SECTOR_OFFSET_DEG + k * DAY_SECTOR_STEP_DEG, R_DAY_IN, R_DAY_OUT));
   }
   return lines;
 }
@@ -677,12 +686,10 @@ function dayGlyphMarkers() {
       return normalizedAngle + turnsFromSectorCenter * 360;
     });
     const labelCenter =
-      measuredAngles.reduce((sum, measuredAngle) => sum + measuredAngle, 0) /
-      measuredAngles.length;
+      measuredAngles.reduce((sum, measuredAngle) => sum + measuredAngle, 0) / measuredAngles.length;
 
     return centers.map((_, index) => {
-      const angle =
-        labelCenter + (measuredAngles[index] - labelCenter) * DAY_GLYPH_SPACING_SCALE;
+      const angle = labelCenter + (measuredAngles[index] - labelCenter) * DAY_GLYPH_SPACING_SCALE;
       const { x, y } = polarPoint(angle, R_DAY_GLYPH_GUIDE);
       const rayScale = R_DIAL_EDGE / R_DAY_GLYPH_GUIDE;
       const normalizedRayAngle = (angle + 360) % 360;
@@ -726,7 +733,12 @@ function handPoint(angleDeg: number, along: number, lateral: number) {
   };
 }
 
-function annularSectorPath(angleDeg: number, radius: number, halfThickness: number, halfLength: number) {
+function annularSectorPath(
+  angleDeg: number,
+  radius: number,
+  halfThickness: number,
+  halfLength: number,
+) {
   const innerRadius = radius - halfThickness;
   const outerRadius = radius + halfThickness;
   const halfAngleDeg = ((halfLength / radius) * 180) / Math.PI;
@@ -915,10 +927,7 @@ function FlatHourBaton({
   ];
 
   return (
-    <g
-      transform={`rotate(${degFrom12} ${CX} ${CY}) translate(${lateralOffset} 0)`}
-      opacity={0.55}
-    >
+    <g transform={`rotate(${degFrom12} ${CX} ${CY}) translate(${lateralOffset} 0)`} opacity={0.55}>
       <path d={ptsToPath(red)} fill="#ff3333" stroke="#ff6666" strokeWidth={1.5} />
       <path d={ptsToPath(blue)} fill="#3388ff" stroke="#66aaff" strokeWidth={1.5} />
       <path d={ptsToPath(yellow)} fill="#ffcc00" stroke="#ffdd44" strokeWidth={1.5} />
@@ -1019,18 +1028,18 @@ function DateWindowLighting({
   position: LightDiskPosition;
   settings: DateWindowLightSettings;
 }) {
-  const { castDistance, castOpacity, lightX, lightY, pointLightStrength } =
-    dateWindowLightModel(position, brightness, settings);
+  const { castDistance, castOpacity, lightX, lightY, pointLightStrength } = dateWindowLightModel(
+    position,
+    brightness,
+    settings,
+  );
   const wallDiffuse = (normalX: number, normalY: number) =>
     Math.max(0, normalX * position.u + normalY * position.v);
   const wallOpacity = (normalX: number, normalY: number) =>
     settings.wallStrength *
     (0.025 + (1 - wallDiffuse(normalX, normalY)) * 0.3 * pointLightStrength);
   const highlightOpacity = (normalX: number, normalY: number) =>
-    settings.wallStrength *
-    wallDiffuse(normalX, normalY) *
-    0.16 *
-    pointLightStrength;
+    settings.wallStrength * wallDiffuse(normalX, normalY) * 0.16 * pointLightStrength;
   const shadowFramePath = [
     `M ${DATE_WINDOW_CLIP_LEFT - 100} ${DATE_WINDOW_CLIP_TOP - 100}`,
     `H ${DATE_WINDOW_CLIP_RIGHT + 100}`,
@@ -1129,11 +1138,7 @@ function DateWindowLighting({
             stdDeviation={settings.softness}
             result="soft-shadow"
           />
-          <feOffset
-            in="soft-shadow"
-            dx={-lightX * castDistance}
-            dy={-lightY * castDistance}
-          />
+          <feOffset in="soft-shadow" dx={-lightX * castDistance} dy={-lightY * castDistance} />
         </filter>
       </defs>
 
@@ -1379,10 +1384,7 @@ function HemisphereLightControl({
       <div className="mt-3 border-t border-black/15 pt-2">
         <div className="mb-1 text-[10px] font-bold text-black">Date window</div>
         {dateWindowControls.map((control) => (
-          <label
-            key={control.key}
-            className="mt-1.5 block text-[10px] font-semibold text-black"
-          >
+          <label key={control.key} className="mt-1.5 block text-[10px] font-semibold text-black">
             <span className="flex items-center justify-between gap-2">
               <span>{control.label}</span>
               <output className="tabular-nums">{control.valueText}</output>
@@ -1436,9 +1438,7 @@ function LitAnnularPaintCapsule({
     const crossT = (crossIndex / crossSegments) * 2 - 1;
     const along = -halfLength + alongT * halfLength * 2;
     const across = crossT * halfThickness;
-    const crossProfile = Math.sqrt(
-      Math.max(0, 1 - (across / halfThickness) ** 2),
-    );
+    const crossProfile = Math.sqrt(Math.max(0, 1 - (across / halfThickness) ** 2));
     const distanceFromEnd = halfLength - Math.abs(along);
     const endProgress = Math.min(1, Math.max(0, distanceFromEnd / endRoundingLength));
     const endProfile = Math.sqrt(Math.max(0, 1 - (1 - endProgress) ** 2));
@@ -1451,24 +1451,16 @@ function LitAnnularPaintCapsule({
     const tangent = { x: Math.cos(worldRadians), y: Math.sin(worldRadians) };
     const radial = { x: Math.sin(worldRadians), y: -Math.cos(worldRadians) };
     const crossDerivative =
-      (-paintHeight * endProfile * across) /
-      (halfThickness ** 2 * Math.max(0.0001, crossProfile));
+      (-paintHeight * endProfile * across) / (halfThickness ** 2 * Math.max(0.0001, crossProfile));
     const endDerivative =
       endProgress < 1
-        ? (paintHeight *
-            crossProfile *
-            (1 - endProgress) *
-            (along < 0 ? 1 : -1)) /
+        ? (paintHeight * crossProfile * (1 - endProgress) * (along < 0 ? 1 : -1)) /
           (endRoundingLength * Math.max(0.0001, endProfile))
         : 0;
     const tangentScale = (radius + across) / radius;
     const normal = normalize3({
-      x:
-        tangent.x * (-endDerivative / tangentScale) +
-        radial.x * -crossDerivative,
-      y:
-        tangent.y * (-endDerivative / tangentScale) +
-        radial.y * -crossDerivative,
+      x: tangent.x * (-endDerivative / tangentScale) + radial.x * -crossDerivative,
+      y: tangent.y * (-endDerivative / tangentScale) + radial.y * -crossDerivative,
       z: 1,
     });
 
@@ -1498,12 +1490,7 @@ function LitAnnularPaintCapsule({
         ),
       );
       const center = averagePoints(corners.map((corner) => corner.worldPoint));
-      const color = shadeGlossyPaintFacet(
-        normal,
-        center,
-        lightPosition,
-        lightBrightness,
-      );
+      const color = shadeGlossyPaintFacet(normal, center, lightPosition, lightBrightness);
 
       return {
         key: `${alongIndex}-${crossIndex}`,
@@ -1604,11 +1591,7 @@ function WeekIndicatorHand({
           y2={headCenter.y}
         >
           {litShaftStops.map((stop) => (
-            <stop
-              key={stop.offset}
-              offset={`${stop.offset * 100}%`}
-              stopColor={stop.color.fill}
-            />
+            <stop key={stop.offset} offset={`${stop.offset * 100}%`} stopColor={stop.color.fill} />
           ))}
         </linearGradient>
         <filter id="week-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
@@ -1620,9 +1603,7 @@ function WeekIndicatorHand({
         <path
           d={ptsToPath(shaft)}
           fill={
-            dynamicallyLit
-              ? "url(#week-hand-shaft-lit-gradient)"
-              : "url(#week-hand-shaft-gradient)"
+            dynamicallyLit ? "url(#week-hand-shaft-lit-gradient)" : "url(#week-hand-shaft-gradient)"
           }
           stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#171815"}
           strokeWidth={1.44}
@@ -1724,11 +1705,7 @@ function DayIndicatorHand({
           y2={headCenter.y}
         >
           {litShaftStops.map((stop) => (
-            <stop
-              key={stop.offset}
-              offset={`${stop.offset * 100}%`}
-              stopColor={stop.color.fill}
-            />
+            <stop key={stop.offset} offset={`${stop.offset * 100}%`} stopColor={stop.color.fill} />
           ))}
         </linearGradient>
         <filter id="day-hand-shadow" x="-30%" y="-20%" width="170%" height="160%">
@@ -1740,9 +1717,7 @@ function DayIndicatorHand({
         <path
           d={ptsToPath(shaft)}
           fill={
-            dynamicallyLit
-              ? "url(#day-hand-shaft-lit-gradient)"
-              : "url(#day-hand-shaft-gradient)"
+            dynamicallyLit ? "url(#day-hand-shaft-lit-gradient)" : "url(#day-hand-shaft-gradient)"
           }
           stroke={dynamicallyLit ? litShaftStops[0].color.stroke : "#363633"}
           strokeWidth={1.4}
@@ -1790,31 +1765,11 @@ function HourHand({
   const darkBase = handPoint(HOUR_HAND_ANGLE_DEG, HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH);
 
   if (mode === "3d") {
-    const ridgeRear = handPrismPoint(
-      HOUR_HAND_REAR_RADIUS,
-      0,
-      HOUR_HAND_PRISM_HEIGHT,
-    );
-    const positiveBase = handPrismPoint(
-      HOUR_HAND_BASE_RADIUS,
-      HOUR_HAND_HALF_WIDTH,
-      0,
-    );
-    const positiveTip = handPrismPoint(
-      HOUR_HAND_TIP_RADIUS,
-      HOUR_HAND_TIP_HALF_WIDTH,
-      0,
-    );
-    const negativeTip = handPrismPoint(
-      HOUR_HAND_TIP_RADIUS,
-      -HOUR_HAND_TIP_HALF_WIDTH,
-      0,
-    );
-    const negativeBase = handPrismPoint(
-      HOUR_HAND_BASE_RADIUS,
-      -HOUR_HAND_HALF_WIDTH,
-      0,
-    );
+    const ridgeRear = handPrismPoint(HOUR_HAND_REAR_RADIUS, 0, HOUR_HAND_PRISM_HEIGHT);
+    const positiveBase = handPrismPoint(HOUR_HAND_BASE_RADIUS, HOUR_HAND_HALF_WIDTH, 0);
+    const positiveTip = handPrismPoint(HOUR_HAND_TIP_RADIUS, HOUR_HAND_TIP_HALF_WIDTH, 0);
+    const negativeTip = handPrismPoint(HOUR_HAND_TIP_RADIUS, -HOUR_HAND_TIP_HALF_WIDTH, 0);
+    const negativeBase = handPrismPoint(HOUR_HAND_BASE_RADIUS, -HOUR_HAND_HALF_WIDTH, 0);
     const ridgeTipHeight = planeHeightAt(
       ridgeRear,
       positiveTip,
@@ -1849,11 +1804,7 @@ function HourHand({
   }
 
   return (
-    <g
-      data-hour-hand
-      data-hand-rendering="flat"
-      transform={`rotate(${rotation} ${CX} ${CY})`}
-    >
+    <g data-hour-hand data-hand-rendering="flat" transform={`rotate(${rotation} ${CX} ${CY})`}>
       <defs>
         <linearGradient id="hour-light-facet" x1="100%" y1="100%" x2="0%" y2="0%">
           <stop offset="0%" stopColor="#777874" />
@@ -1911,31 +1862,23 @@ function MinuteHand({
   rotation: number;
 }) {
   const rear = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_REAR_RADIUS, 0);
-  const upperBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, -MINUTE_HAND_HALF_WIDTH);
+  const upperBase = handPoint(
+    MINUTE_HAND_ANGLE_DEG,
+    MINUTE_HAND_BASE_RADIUS,
+    -MINUTE_HAND_HALF_WIDTH,
+  );
   const tip = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_TIP_RADIUS, 0);
-  const lowerBase = handPoint(MINUTE_HAND_ANGLE_DEG, MINUTE_HAND_BASE_RADIUS, MINUTE_HAND_HALF_WIDTH);
+  const lowerBase = handPoint(
+    MINUTE_HAND_ANGLE_DEG,
+    MINUTE_HAND_BASE_RADIUS,
+    MINUTE_HAND_HALF_WIDTH,
+  );
 
   if (mode === "3d") {
-    const ridgeRear = handPrismPoint(
-      MINUTE_HAND_REAR_RADIUS,
-      0,
-      MINUTE_HAND_PRISM_HEIGHT,
-    );
-    const ridgeTip = handPrismPoint(
-      MINUTE_HAND_TIP_RADIUS,
-      0,
-      MINUTE_HAND_PRISM_HEIGHT,
-    );
-    const negativeBase = handPrismPoint(
-      MINUTE_HAND_BASE_RADIUS,
-      -MINUTE_HAND_HALF_WIDTH,
-      0,
-    );
-    const positiveBase = handPrismPoint(
-      MINUTE_HAND_BASE_RADIUS,
-      MINUTE_HAND_HALF_WIDTH,
-      0,
-    );
+    const ridgeRear = handPrismPoint(MINUTE_HAND_REAR_RADIUS, 0, MINUTE_HAND_PRISM_HEIGHT);
+    const ridgeTip = handPrismPoint(MINUTE_HAND_TIP_RADIUS, 0, MINUTE_HAND_PRISM_HEIGHT);
+    const negativeBase = handPrismPoint(MINUTE_HAND_BASE_RADIUS, -MINUTE_HAND_HALF_WIDTH, 0);
+    const positiveBase = handPrismPoint(MINUTE_HAND_BASE_RADIUS, MINUTE_HAND_HALF_WIDTH, 0);
     const faces: LitHandFace[] = [
       {
         key: "negative",
@@ -1962,11 +1905,7 @@ function MinuteHand({
   }
 
   return (
-    <g
-      data-minute-hand
-      data-hand-rendering="flat"
-      transform={`rotate(${rotation} ${CX} ${CY})`}
-    >
+    <g data-minute-hand data-hand-rendering="flat" transform={`rotate(${rotation} ${CX} ${CY})`}>
       <defs>
         <linearGradient id="minute-upper-facet" x1="0%" y1="100%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#757672" />
@@ -2013,11 +1952,13 @@ function MinuteHand({
 }
 
 function SecondsHand({
+  animatedOffsetSeconds,
   lightBrightness,
   lightPosition,
   mode,
   rotation,
 }: {
+  animatedOffsetSeconds?: number;
   lightBrightness: number;
   lightPosition: Vec3;
   mode: MarkerMode;
@@ -2110,7 +2051,18 @@ function SecondsHand({
     <g
       data-seconds-hand
       data-hand-rendering={dynamicallyLit ? "lit-flat" : "flat"}
-      transform={`rotate(${rotation} ${CX} ${CY})`}
+      transform={
+        animatedOffsetSeconds === undefined ? `rotate(${rotation} ${CX} ${CY})` : undefined
+      }
+      style={
+        animatedOffsetSeconds === undefined
+          ? undefined
+          : {
+              animation: "screensaver-seconds-hand 60s steps(480, end) infinite",
+              animationDelay: `${-animatedOffsetSeconds}s`,
+              transformOrigin: `${CX}px ${CY}px`,
+            }
+      }
     >
       <defs>
         <linearGradient id="seconds-tail-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -2160,11 +2112,7 @@ function SecondsHand({
           y2={gradientEndY}
         >
           {handGradientStops.map((stop) => (
-            <stop
-              key={stop.offset}
-              offset={`${stop.offset * 100}%`}
-              stopColor={stop.color.fill}
-            />
+            <stop key={stop.offset} offset={`${stop.offset * 100}%`} stopColor={stop.color.fill} />
           ))}
         </linearGradient>
         <filter id="seconds-hand-shadow" x="-30%" y="-10%" width="170%" height="130%">
@@ -2175,11 +2123,7 @@ function SecondsHand({
       <g filter={dynamicallyLit ? undefined : "url(#seconds-hand-shadow)"}>
         <path
           d={ptsToPath(counterweight)}
-          fill={
-            dynamicallyLit
-              ? "url(#seconds-hand-lit-gradient)"
-              : "url(#seconds-tail-gradient)"
-          }
+          fill={dynamicallyLit ? "url(#seconds-hand-lit-gradient)" : "url(#seconds-tail-gradient)"}
           stroke={
             dynamicallyLit
               ? handGradientStops[handGradientStops.length - 1].color.stroke
@@ -2197,11 +2141,7 @@ function SecondsHand({
           cx={CX}
           cy={CY}
           r={SECOND_HAND_HUB_RADIUS}
-          fill={
-            dynamicallyLit
-              ? "url(#seconds-hub-lit-gradient)"
-              : "url(#seconds-hub-gradient)"
-          }
+          fill={dynamicallyLit ? "url(#seconds-hub-lit-gradient)" : "url(#seconds-hub-gradient)"}
           stroke={dynamicallyLit ? hubUnlitColor.stroke : "#565753"}
           strokeWidth={4}
         />
@@ -2215,11 +2155,7 @@ function SecondsHand({
           cx={CX}
           cy={CY}
           r={10}
-          fill={
-            dynamicallyLit
-              ? "url(#seconds-pin-lit-gradient)"
-              : "url(#seconds-pin-gradient)"
-          }
+          fill={dynamicallyLit ? "url(#seconds-pin-lit-gradient)" : "url(#seconds-pin-gradient)"}
           stroke={dynamicallyLit ? hubUnlitColor.stroke : "#20211f"}
           strokeWidth={2}
         />
@@ -2231,7 +2167,7 @@ function SecondsHand({
   );
 }
 
-export function WeeklyCalendarWatch({ className = "" }: Props) {
+export function WeeklyCalendarWatch({ className = "", screensaver = false }: Props) {
   const [opacityIdx, setOpacityIdx] = useState(0);
   const [referenceIdx, setReferenceIdx] = useState(1);
   const [drawVisible, setDrawVisible] = useState(true);
@@ -2245,14 +2181,13 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     v: -0.3543,
   });
   const [markerLightBrightness, setMarkerLightBrightness] = useState(1.92);
-  const [dateWindowLightSettings, setDateWindowLightSettings] =
-    useState<DateWindowLightSettings>({
-      softness: 12.9,
-      castDistance: 18.3,
-      castStrength: 1.11,
-      wallStrength: 1.21,
-      bevelStrength: 0.63,
-    });
+  const [dateWindowLightSettings, setDateWindowLightSettings] = useState<DateWindowLightSettings>({
+    softness: 12.9,
+    castDistance: 18.3,
+    castStrength: 1.11,
+    wallStrength: 1.21,
+    bevelStrength: 0.63,
+  });
   const initialClockTimeRef = useRef(Date.now());
   const initialCalendarDate = new Date(initialClockTimeRef.current);
   const initialDateWheelDay = initialCalendarDate.getDate();
@@ -2270,14 +2205,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       DATE_WHEEL_UNWRAPPED_ANGLES,
     ),
   );
-  const [dateWheelDay, setDateWheelDay] = useState<number>(
-    initialDateWheelDay,
-  );
-  const [dateWheelManualDayOrdinal, setDateWheelManualDayOrdinal] =
-    useState<number | null>(null);
-  const dateWheelSyncedDayOrdinalRef = useRef(
-    localCalendarDayOrdinal(initialCalendarDate),
-  );
+  const [dateWheelDay, setDateWheelDay] = useState<number>(initialDateWheelDay);
+  const [dateWheelManualDayOrdinal, setDateWheelManualDayOrdinal] = useState<number | null>(null);
+  const dateWheelSyncedDayOrdinalRef = useRef(localCalendarDayOrdinal(initialCalendarDate));
   const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
   const [dateRingOffset, setDateRingOffset] = useState({ x: -3, y: 1 });
   const [capturedDateRingAngles, setCapturedDateRingAngles] = useState<number[]>([]);
@@ -2300,23 +2230,30 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   useEffect(() => {
     if (!timeRunning) return;
 
-    let timerId: number;
-
     const advanceClock = () => {
       const realTimeMs = Date.now();
       const anchor = clockAnchorRef.current;
-      setClockTimeMs(
-        anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale,
-      );
+      setClockTimeMs(anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale);
+    };
+    const tickIntervalMs = screensaver ? 1000 : Math.max(30, SECOND_HAND_TICK_MS / timeScale);
+
+    let timerId: number;
+    const tick = () => {
+      advanceClock();
+      const realTimeMs = Date.now();
+      const anchor = clockAnchorRef.current;
+      const watchTimeMs = anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale;
+      const remainder =
+        ((watchTimeMs % SECOND_HAND_TICK_MS) + SECOND_HAND_TICK_MS) % SECOND_HAND_TICK_MS;
+      const phaseAlignedDelay = (SECOND_HAND_TICK_MS - remainder) / timeScale;
       timerId = window.setTimeout(
-        advanceClock,
-        Math.max(30, SECOND_HAND_TICK_MS / timeScale),
+        tick,
+        tickIntervalMs > 30 ? Math.max(4, phaseAlignedDelay) : tickIntervalMs,
       );
     };
-
-    advanceClock();
+    tick();
     return () => window.clearTimeout(timerId);
-  }, [timeRunning, timeScale]);
+  }, [screensaver, timeRunning, timeScale]);
 
   useEffect(() => {
     if (clockTimeMs === null) return;
@@ -2324,10 +2261,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
     const currentDate = new Date(clockTimeMs);
     const dayOrdinal = localCalendarDayOrdinal(currentDate);
     if (dateWheelManualDayOrdinal === dayOrdinal) return;
-    if (
-      dateWheelManualDayOrdinal === null &&
-      dateWheelSyncedDayOrdinalRef.current === dayOrdinal
-    ) {
+    if (dateWheelManualDayOrdinal === null && dateWheelSyncedDayOrdinalRef.current === dayOrdinal) {
       return;
     }
 
@@ -2381,11 +2315,16 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const displayedLiveSecondsHandRotation =
     timeScale > 10 ? smoothSecondsHandRotation : secondsHandRotation;
   const minuteHandAngle =
-    clockTime === null ? MINUTE_HAND_ANGLE_DEG : (clockTime.getMinutes() + secondsWithMilliseconds / 60) * 6;
+    clockTime === null
+      ? MINUTE_HAND_ANGLE_DEG
+      : (clockTime.getMinutes() + secondsWithMilliseconds / 60) * 6;
   const hourHandAngle =
     clockTime === null
       ? HOUR_HAND_ANGLE_DEG
-      : ((clockTime.getHours() % 12) + clockTime.getMinutes() / 60 + secondsWithMilliseconds / 3600) * 30;
+      : ((clockTime.getHours() % 12) +
+          clockTime.getMinutes() / 60 +
+          secondsWithMilliseconds / 3600) *
+        30;
   const continuousWeek =
     clockTime === null
       ? WEEK_HAND_REFERENCE_WEEK
@@ -2398,9 +2337,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
         localCalendarDayOrdinal(clockTime) -
         calendarDayAnchorRef.current.ordinal;
   const dayHandAngle =
-    DAY_SECTOR_OFFSET_DEG -
-    DAY_SECTOR_STEP_DEG / 2 +
-    continuousDayIndex * DAY_SECTOR_STEP_DEG;
+    DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + continuousDayIndex * DAY_SECTOR_STEP_DEG;
   const liveHandAngles: Record<HandKey, number> = {
     week: weekHandAngle,
     day: dayHandAngle,
@@ -2551,9 +2488,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
   const advanceDateWheel = () => {
     const nextDay = (dateWheelDay % DATE_WHEEL_CALIBRATION.dayCount) + 1;
     const measuredTarget = DATE_WHEEL_CALIBRATION.measuredAnglesDeg[nextDay - 1];
-    setDateWheelManualDayOrdinal(
-      localCalendarDayOrdinal(clockTime ?? new Date()),
-    );
+    setDateWheelManualDayOrdinal(localCalendarDayOrdinal(clockTime ?? new Date()));
     setDateRingRotation((angle) => {
       const completedTurns = Math.floor(angle / 360);
       let unwrappedTarget = completedTurns * 360 + measuredTarget;
@@ -2565,82 +2500,84 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
-      <div className="fixed left-3 top-3 z-40 flex items-center gap-1.5">
-        <button
-          type="button"
-          aria-pressed={uiVisible}
-          aria-label="Toggle interface controls"
-          title="Interface controls"
-          onClick={() => setUiVisible((visible) => !visible)}
-          className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          ⚙️
-        </button>
-        {[10, 100, 1000, 10_000, 100_000].map((multiplier) => {
-          const active = timeScale === multiplier;
-          return (
-            <button
-              key={multiplier}
-              type="button"
-              aria-pressed={active}
-              title={active ? "Return to real-time speed" : `Run time at ${multiplier}×`}
-              onClick={() => setTimeMultiplier(multiplier)}
-              className={`rounded-lg border-2 border-white/40 px-3 py-2 text-sm font-semibold shadow-lg transition active:scale-95 ${
-                active
-                  ? "bg-black text-white hover:bg-zinc-800"
-                  : "bg-white text-black hover:bg-zinc-100"
-              }`}
-            >
-              {multiplier.toLocaleString("en-US")}x
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          title="Reset the simulated watch to the current local time"
-          onClick={resetTimeToNow}
-          className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          Now
-        </button>
-      </div>
+      {!screensaver && (
+        <div className="fixed left-3 top-3 z-40 flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={uiVisible}
+            aria-label="Toggle interface controls"
+            title="Interface controls"
+            onClick={() => setUiVisible((visible) => !visible)}
+            className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          >
+            ⚙️
+          </button>
+          {[10, 100, 1000, 10_000, 100_000].map((multiplier) => {
+            const active = timeScale === multiplier;
+            return (
+              <button
+                key={multiplier}
+                type="button"
+                aria-pressed={active}
+                title={active ? "Return to real-time speed" : `Run time at ${multiplier}×`}
+                onClick={() => setTimeMultiplier(multiplier)}
+                className={`rounded-lg border-2 border-white/40 px-3 py-2 text-sm font-semibold shadow-lg transition active:scale-95 ${
+                  active
+                    ? "bg-black text-white hover:bg-zinc-800"
+                    : "bg-white text-black hover:bg-zinc-100"
+                }`}
+              >
+                {multiplier.toLocaleString("en-US")}x
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            title="Reset the simulated watch to the current local time"
+            onClick={resetTimeToNow}
+            className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+          >
+            Now
+          </button>
+        </div>
+      )}
 
       {uiVisible && (
         <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
-        <label htmlFor="hand-selector" className="pl-2 text-sm font-semibold text-black">
-          Hand
-        </label>
-        <select
-          id="hand-selector"
-          value={selectedHand}
-          onChange={(event) => setSelectedHand(event.target.value as HandKey)}
-          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black"
-        >
-          {HAND_OPTIONS.map((hand) => (
-            <option key={hand.value} value={hand.value}>
-              {hand.label}
-            </option>
-          ))}
-        </select>
-        <output className="min-w-14 text-right text-sm font-semibold tabular-nums text-black">
-          {selectedHandAngle.toFixed(1)}°
-        </output>
-        <button
-          type="button"
-          aria-pressed={!timeRunning}
-          onClick={toggleTimeRunning}
-          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
-        >
-          {timeRunning ? "Pause" : "Continue"}
-        </button>
-        <button
-          type="button"
-          disabled={manualHandAngles[selectedHand] === undefined}
-          onClick={returnSelectedHandToLive}
-          className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-default disabled:opacity-40"
-        >
-          Live
-        </button>
+          <label htmlFor="hand-selector" className="pl-2 text-sm font-semibold text-black">
+            Hand
+          </label>
+          <select
+            id="hand-selector"
+            value={selectedHand}
+            onChange={(event) => setSelectedHand(event.target.value as HandKey)}
+            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black"
+          >
+            {HAND_OPTIONS.map((hand) => (
+              <option key={hand.value} value={hand.value}>
+                {hand.label}
+              </option>
+            ))}
+          </select>
+          <output className="min-w-14 text-right text-sm font-semibold tabular-nums text-black">
+            {selectedHandAngle.toFixed(1)}°
+          </output>
+          <button
+            type="button"
+            aria-pressed={!timeRunning}
+            onClick={toggleTimeRunning}
+            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
+          >
+            {timeRunning ? "Pause" : "Continue"}
+          </button>
+          <button
+            type="button"
+            disabled={manualHandAngles[selectedHand] === undefined}
+            onClick={returnSelectedHandToLive}
+            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-default disabled:opacity-40"
+          >
+            Live
+          </button>
         </div>
       )}
 
@@ -2688,9 +2625,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
                   closestDay = index + 1;
                 }
               });
-              setDateWheelManualDayOrdinal(
-                localCalendarDayOrdinal(clockTime ?? new Date()),
-              );
+              setDateWheelManualDayOrdinal(localCalendarDayOrdinal(clockTime ?? new Date()));
               setDateRingRotation(angle);
               setDateWheelDay(closestDay);
             }}
@@ -2723,30 +2658,30 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
 
       {uiVisible && (
         <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
-        <span className="text-xs font-semibold tabular-nums text-black">0°</span>
-        <input
-          type="range"
-          min={0}
-          max={360}
-          step={0.1}
-          value={selectedHandAngle}
-          aria-label={`Rotate ${selectedHand} hand`}
-          onChange={(event) => {
-            const angle = Number(event.target.value);
-            if (selectedHand === "day" || selectedHand === "week") {
-              const currentDate = clockTime ?? new Date();
-              const currentIsoWeek = isoWeekCoordinates(currentDate);
-              manualCalendarHandPeriodRef.current[selectedHand] =
-                selectedHand === "day"
-                  ? localCalendarDayOrdinal(currentDate)
-                  : currentIsoWeek.year * 100 + currentIsoWeek.week;
-            }
-            setManualHandAngles((angles) => ({ ...angles, [selectedHand]: angle }));
-          }}
-          className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
-          style={{ writingMode: "vertical-lr" }}
-        />
-        <span className="text-xs font-semibold tabular-nums text-black">360°</span>
+          <span className="text-xs font-semibold tabular-nums text-black">0°</span>
+          <input
+            type="range"
+            min={0}
+            max={360}
+            step={0.1}
+            value={selectedHandAngle}
+            aria-label={`Rotate ${selectedHand} hand`}
+            onChange={(event) => {
+              const angle = Number(event.target.value);
+              if (selectedHand === "day" || selectedHand === "week") {
+                const currentDate = clockTime ?? new Date();
+                const currentIsoWeek = isoWeekCoordinates(currentDate);
+                manualCalendarHandPeriodRef.current[selectedHand] =
+                  selectedHand === "day"
+                    ? localCalendarDayOrdinal(currentDate)
+                    : currentIsoWeek.year * 100 + currentIsoWeek.week;
+              }
+              setManualHandAngles((angles) => ({ ...angles, [selectedHand]: angle }));
+            }}
+            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
+            style={{ writingMode: "vertical-lr" }}
+          />
+          <span className="text-xs font-semibold tabular-nums text-black">360°</span>
         </div>
       )}
 
@@ -2775,7 +2710,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           }}
         >
           <img
-            src="/date-ring-overlay.png"
+            src={publicAsset("date-ring-overlay.png")}
             alt=""
             aria-hidden
             draggable={false}
@@ -2804,176 +2739,216 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
         >
-          <g
-            className="transition-opacity duration-200"
-            style={{ opacity: drawVisible ? 1 : 0 }}
-          >
-          <circle cx={CX} cy={CY} r={R_DIAL_EDGE} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
-          <circle cx={CX} cy={CY} r={R_WEEK_OUT} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
-          <circle cx={CX} cy={CY} r={R_WEEK_IN} fill="none" stroke={MAGENTA} strokeWidth={DIAL_STROKE_WIDTH} />
-
-          {monthSectors.map((s, i) => (
-            <line
-              key={`m${i}`}
-              x1={s.x1}
-              y1={s.y1}
-              x2={s.x2}
-              y2={s.y2}
-              stroke={MAGENTA}
-              strokeWidth={DIAL_STROKE_WIDTH}
-              strokeLinecap="butt"
-            />
-          ))}
-
-          {weekSectors.map((s, i) => (
-            <line
-              key={`w${i}`}
-              x1={s.x1}
-              y1={s.y1}
-              x2={s.x2}
-              y2={s.y2}
-              stroke={MAGENTA}
-              strokeWidth={DIAL_STROKE_WIDTH}
-              strokeLinecap="butt"
-            />
-          ))}
-
-          {wDots.map((p, i) => (
+          <g className="transition-opacity duration-200" style={{ opacity: drawVisible ? 1 : 0 }}>
             <circle
-              key={`wd${i}`}
-              cx={p.x}
-              cy={p.y}
-              r={WEEK_DOT_RADIUS}
-              fill={MAGENTA}
+              cx={CX}
+              cy={CY}
+              r={R_DIAL_EDGE}
+              fill="none"
               stroke={MAGENTA}
               strokeWidth={DIAL_STROKE_WIDTH}
             />
-          ))}
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_WEEK_OUT}
+              fill="none"
+              stroke={MAGENTA}
+              strokeWidth={DIAL_STROKE_WIDTH}
+            />
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_WEEK_IN}
+              fill="none"
+              stroke={MAGENTA}
+              strokeWidth={DIAL_STROKE_WIDTH}
+            />
 
-          {mDots.map((p, i) => (
-            <circle key={`md${i}`} cx={p.x} cy={p.y} r={MINUTE_DOT_RADIUS} fill={ORANGE} />
-          ))}
+            {monthSectors.map((s, i) => (
+              <line
+                key={`m${i}`}
+                x1={s.x1}
+                y1={s.y1}
+                x2={s.x2}
+                y2={s.y2}
+                stroke={MAGENTA}
+                strokeWidth={DIAL_STROKE_WIDTH}
+                strokeLinecap="butt"
+              />
+            ))}
 
-          <circle cx={CX} cy={CY} r={R_DAY_OUT} fill="none" stroke={CYAN} strokeWidth={DIAL_STROKE_WIDTH} />
-          <circle cx={CX} cy={CY} r={R_DAY_IN} fill="none" stroke={CYAN} strokeWidth={DIAL_STROKE_WIDTH} />
+            {weekSectors.map((s, i) => (
+              <line
+                key={`w${i}`}
+                x1={s.x1}
+                y1={s.y1}
+                x2={s.x2}
+                y2={s.y2}
+                stroke={MAGENTA}
+                strokeWidth={DIAL_STROKE_WIDTH}
+                strokeLinecap="butt"
+              />
+            ))}
 
-          {daySectors.map((s, i) => (
-            <line
-              key={`day${i}`}
-              x1={s.x1}
-              y1={s.y1}
-              x2={s.x2}
-              y2={s.y2}
+            {wDots.map((p, i) => (
+              <circle
+                key={`wd${i}`}
+                cx={p.x}
+                cy={p.y}
+                r={WEEK_DOT_RADIUS}
+                fill={MAGENTA}
+                stroke={MAGENTA}
+                strokeWidth={DIAL_STROKE_WIDTH}
+              />
+            ))}
+
+            {mDots.map((p, i) => (
+              <circle key={`md${i}`} cx={p.x} cy={p.y} r={MINUTE_DOT_RADIUS} fill={ORANGE} />
+            ))}
+
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_DAY_OUT}
+              fill="none"
               stroke={CYAN}
               strokeWidth={DIAL_STROKE_WIDTH}
-              strokeLinecap="butt"
             />
-          ))}
+            <circle
+              cx={CX}
+              cy={CY}
+              r={R_DAY_IN}
+              fill="none"
+              stroke={CYAN}
+              strokeWidth={DIAL_STROKE_WIDTH}
+            />
 
-          {markerMode === "flat" ? (
-            <>
-              {SINGLE_BATON_HOURS.map((h) => (
-                <FlatHourBaton key={h} degFrom12={hourAngleDeg(h)} />
-              ))}
-              <FlatHourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
-              <FlatHourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
-            </>
-          ) : (
-            <>
-              {SINGLE_BATON_HOURS.map((h) => (
+            {daySectors.map((s, i) => (
+              <line
+                key={`day${i}`}
+                x1={s.x1}
+                y1={s.y1}
+                x2={s.x2}
+                y2={s.y2}
+                stroke={CYAN}
+                strokeWidth={DIAL_STROKE_WIDTH}
+                strokeLinecap="butt"
+              />
+            ))}
+
+            {markerMode === "flat" ? (
+              <>
+                {SINGLE_BATON_HOURS.map((h) => (
+                  <FlatHourBaton key={h} degFrom12={hourAngleDeg(h)} />
+                ))}
+                <FlatHourBaton degFrom12={0} lateralOffset={-BATON_12_LATERAL} />
+                <FlatHourBaton degFrom12={0} lateralOffset={BATON_12_LATERAL} />
+              </>
+            ) : (
+              <>
+                {SINGLE_BATON_HOURS.map((h) => (
+                  <LitHourBaton
+                    key={h}
+                    degFrom12={hourAngleDeg(h)}
+                    lightBrightness={markerLightBrightness}
+                    lightPosition={markerLightPosition}
+                  />
+                ))}
                 <LitHourBaton
-                  key={h}
-                  degFrom12={hourAngleDeg(h)}
+                  degFrom12={0}
+                  lateralOffset={-BATON_12_LATERAL}
                   lightBrightness={markerLightBrightness}
                   lightPosition={markerLightPosition}
                 />
-              ))}
-              <LitHourBaton
-                degFrom12={0}
-                lateralOffset={-BATON_12_LATERAL}
-                lightBrightness={markerLightBrightness}
-                lightPosition={markerLightPosition}
-              />
-              <LitHourBaton
-                degFrom12={0}
-                lateralOffset={BATON_12_LATERAL}
-                lightBrightness={markerLightBrightness}
-                lightPosition={markerLightPosition}
-              />
-            </>
-          )}
+                <LitHourBaton
+                  degFrom12={0}
+                  lateralOffset={BATON_12_LATERAL}
+                  lightBrightness={markerLightBrightness}
+                  lightPosition={markerLightPosition}
+                />
+              </>
+            )}
           </g>
 
-          <g
-            className="transition-opacity duration-200"
-            style={{ opacity: textVisible ? 1 : 0 }}
-          >
-          {digitMarkers.map((marker) => (
-            <text
-              key={`digit-${marker.week}-${marker.index}`}
-              x={marker.digitX}
-              y={marker.digitY}
-              transform={`rotate(${marker.rotation} ${marker.digitX} ${marker.digitY})`}
-              fill="#000000"
-              fontFamily="'Indie Flower', cursive"
-              fontSize={WEEK_DIGIT_FONT_SIZE * marker.scale}
-              fontWeight={700}
-              textAnchor="middle"
-              dominantBaseline="central"
-            >
-              {marker.digit}
-            </text>
-          ))}
+          <g className="transition-opacity duration-200" style={{ opacity: textVisible ? 1 : 0 }}>
+            {digitMarkers.map((marker) => (
+              <text
+                key={`digit-${marker.week}-${marker.index}`}
+                x={marker.digitX}
+                y={marker.digitY}
+                transform={`rotate(${marker.rotation} ${marker.digitX} ${marker.digitY})`}
+                fill="#000000"
+                fontFamily="'Indie Flower', cursive"
+                fontSize={WEEK_DIGIT_FONT_SIZE * marker.scale}
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="central"
+              >
+                {marker.digit}
+              </text>
+            ))}
 
-          {monthMarkers.map((marker) => (
-            <text
-              key={`month-glyph-${marker.month}-${marker.index}`}
-              x={marker.x}
-              y={marker.y}
-              transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
-              fill="#000000"
-              fontFamily="'Indie Flower', cursive"
-              fontSize={MONTH_GLYPH_FONT_SIZE}
-              fontWeight={700}
-              textAnchor="middle"
-              dominantBaseline="central"
-            >
-              {marker.glyph.toUpperCase()}
-            </text>
-          ))}
+            {monthMarkers.map((marker) => (
+              <text
+                key={`month-glyph-${marker.month}-${marker.index}`}
+                x={marker.x}
+                y={marker.y}
+                transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
+                fill="#000000"
+                fontFamily="'Indie Flower', cursive"
+                fontSize={MONTH_GLYPH_FONT_SIZE}
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="central"
+              >
+                {marker.glyph.toUpperCase()}
+              </text>
+            ))}
 
-          {dayMarkers.map((marker) => (
-            <text
-              key={`day-glyph-${marker.day}-${marker.index}`}
-              x={marker.x}
-              y={marker.y}
-              transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
-              fill="#000000"
-              fontFamily="'Indie Flower', cursive"
-              fontSize={DAY_GLYPH_FONT_SIZE}
-              fontWeight={700}
-              textAnchor="middle"
-              dominantBaseline="central"
-            >
-              {marker.glyph.toUpperCase()}
-            </text>
-          ))}
+            {dayMarkers.map((marker) => (
+              <text
+                key={`day-glyph-${marker.day}-${marker.index}`}
+                x={marker.x}
+                y={marker.y}
+                transform={`rotate(${marker.rotation} ${marker.x} ${marker.y})`}
+                fill="#000000"
+                fontFamily="'Indie Flower', cursive"
+                fontSize={DAY_GLYPH_FONT_SIZE}
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="central"
+              >
+                {marker.glyph.toUpperCase()}
+              </text>
+            ))}
           </g>
 
-          <g
-            className="transition-opacity duration-200"
-            style={{ opacity: drawVisible ? 1 : 0 }}
-          >
-          <circle cx={CX} cy={CY} r={37} fill="#000000" />
-          <circle cx={CX} cy={CY} r={7} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
+          <g className="transition-opacity duration-200" style={{ opacity: drawVisible ? 1 : 0 }}>
+            <circle cx={CX} cy={CY} r={37} fill="#000000" />
+            <circle
+              cx={CX}
+              cy={CY}
+              r={7}
+              fill="#000000"
+              stroke="#000000"
+              strokeWidth={DIAL_STROKE_WIDTH}
+            />
 
-          <circle cx={CX} cy={CY} r={10} fill="#000000" stroke="#000000" strokeWidth={DIAL_STROKE_WIDTH} />
+            <circle
+              cx={CX}
+              cy={CY}
+              r={10}
+              fill="#000000"
+              stroke="#000000"
+              strokeWidth={DIAL_STROKE_WIDTH}
+            />
           </g>
         </svg>
 
         {referenceIdx === 1 && (
           <img
-            src="/date-window-shadow.png?v=2"
+            src={`${publicAsset("date-window-shadow.png")}?v=2`}
             alt=""
             aria-hidden
             draggable={false}
@@ -3009,10 +2984,7 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
           preserveAspectRatio="xMidYMid meet"
           aria-hidden
         >
-          <g
-            className="transition-opacity duration-200"
-            style={{ opacity: handsVisible ? 1 : 0 }}
-          >
+          <g className="transition-opacity duration-200" style={{ opacity: handsVisible ? 1 : 0 }}>
             {dayHandVisible && (
               <DayIndicatorHand
                 lightBrightness={markerLightBrightness}
@@ -3047,6 +3019,9 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
             )}
             {secondsHandVisible && (
               <SecondsHand
+                animatedOffsetSeconds={
+                  screensaver ? (initialClockTimeRef.current % 60_000) / 1000 : undefined
+                }
                 lightBrightness={markerLightBrightness}
                 lightPosition={markerLightPosition}
                 mode={markerMode}
@@ -3111,93 +3086,93 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
       <div className="flex flex-col items-center gap-2">
         {uiVisible && (
           <>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-          <button
-          type="button"
-          onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {PHOTO_LABEL[opacityIdx]}
-        </button>
-        <button
-          type="button"
-          onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {referenceImage.label}
-        </button>
-        <button
-          type="button"
-          onClick={() => setDrawVisible((v) => !v)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {drawVisible ? "Drawing: ON" : "Drawing: OFF"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTextVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {textVisible ? "Text: ON" : "Text: OFF"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setGuidesVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {guidesVisible ? "Guides: ON" : "Guides: OFF"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={handsVisible}
-          onClick={() => setHandsVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {handsVisible ? "Hands: ON" : "Hands: OFF"}
-        </button>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-          <button
-          type="button"
-          aria-pressed={weekHandVisible}
-          onClick={() => setWeekHandVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {weekHandVisible ? "Week: ON" : "Week: OFF"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={dayHandVisible}
-          onClick={() => setDayHandVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {dayHandVisible ? "Day: ON" : "Day: OFF"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={hourHandVisible}
-          onClick={() => setHourHandVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {hourHandVisible ? "Hour: ON" : "Hour: OFF"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={minuteHandVisible}
-          onClick={() => setMinuteHandVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {minuteHandVisible ? "Minute: ON" : "Minute: OFF"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={secondsHandVisible}
-          onClick={() => setSecondsHandVisible((visible) => !visible)}
-          className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-        >
-          {secondsHandVisible ? "Second: ON" : "Second: OFF"}
-        </button>
-          </div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {PHOTO_LABEL[opacityIdx]}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {referenceImage.label}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawVisible((v) => !v)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {drawVisible ? "Drawing: ON" : "Drawing: OFF"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTextVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {textVisible ? "Text: ON" : "Text: OFF"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuidesVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {guidesVisible ? "Guides: ON" : "Guides: OFF"}
+              </button>
+              <button
+                type="button"
+                aria-pressed={handsVisible}
+                onClick={() => setHandsVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {handsVisible ? "Hands: ON" : "Hands: OFF"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                aria-pressed={weekHandVisible}
+                onClick={() => setWeekHandVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {weekHandVisible ? "Week: ON" : "Week: OFF"}
+              </button>
+              <button
+                type="button"
+                aria-pressed={dayHandVisible}
+                onClick={() => setDayHandVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {dayHandVisible ? "Day: ON" : "Day: OFF"}
+              </button>
+              <button
+                type="button"
+                aria-pressed={hourHandVisible}
+                onClick={() => setHourHandVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {hourHandVisible ? "Hour: ON" : "Hour: OFF"}
+              </button>
+              <button
+                type="button"
+                aria-pressed={minuteHandVisible}
+                onClick={() => setMinuteHandVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {minuteHandVisible ? "Minute: ON" : "Minute: OFF"}
+              </button>
+              <button
+                type="button"
+                aria-pressed={secondsHandVisible}
+                onClick={() => setSecondsHandVisible((visible) => !visible)}
+                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
+              >
+                {secondsHandVisible ? "Second: ON" : "Second: OFF"}
+              </button>
+            </div>
           </>
         )}
         {uiVisible && (
@@ -3246,10 +3221,30 @@ export function WeeklyCalendarWatch({ className = "" }: Props) {
               {dateRingOffset.y}px
             </output>
             {[
-              { label: "X−", axis: "x" as const, delta: -1, description: "Move date ring left 1 pixel" },
-              { label: "X+", axis: "x" as const, delta: 1, description: "Move date ring right 1 pixel" },
-              { label: "Y−", axis: "y" as const, delta: -1, description: "Move date ring up 1 pixel" },
-              { label: "Y+", axis: "y" as const, delta: 1, description: "Move date ring down 1 pixel" },
+              {
+                label: "X−",
+                axis: "x" as const,
+                delta: -1,
+                description: "Move date ring left 1 pixel",
+              },
+              {
+                label: "X+",
+                axis: "x" as const,
+                delta: 1,
+                description: "Move date ring right 1 pixel",
+              },
+              {
+                label: "Y−",
+                axis: "y" as const,
+                delta: -1,
+                description: "Move date ring up 1 pixel",
+              },
+              {
+                label: "Y+",
+                axis: "y" as const,
+                delta: 1,
+                description: "Move date ring down 1 pixel",
+              },
             ].map(({ label, axis, delta, description }) => (
               <button
                 key={label}

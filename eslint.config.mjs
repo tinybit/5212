@@ -10,6 +10,8 @@ export default tseslint.config(
   {
     ignores: [
       "dist/**",
+      "dist-screensaver/**",
+      "build/**",
       ".output/**",
       ".vercel/**",
       ".nitro/**",

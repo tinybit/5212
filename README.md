@@ -53,6 +53,22 @@ npm run lint
 
 The Vitest lighting suite guards aperture-shadow continuity at the zenith, zero-brightness behavior, hour-hand facet planarity, and back-face specular masking.
 
+## macOS screensaver
+
+The repository can build a native `.saver` bundle containing an offline, button-free version of the watch. It uses the Mac's local time and includes all dial imagery and the Indie Flower font inside the bundle.
+
+Requirements: macOS 13 or newer, Node.js, and the Xcode Command Line Tools.
+
+```bash
+npm ci
+npm run build:screensaver
+open "$(pwd)/build/5212 Weekly Calendar.saver"
+```
+
+The final command opens macOS's screen-saver installer. Approve replacing the existing copy when upgrading, then select **5212 Weekly Calendar** in **System Settings → Screen Saver**. The generated bundle is universal and runs natively on both Apple Silicon and Intel Macs.
+
+See [Building and installing the macOS screensaver](docs/SCREENSAVER.md) for prerequisites, architecture, rebuilding, verification, and troubleshooting.
+
 ## Controls
 
 The dial controls are arranged in four rows:
@@ -72,6 +88,9 @@ The fixed controls above and beside the dial select any hand, rotate it through 
 
 - `src/components/WeeklyCalendarWatch.tsx` — geometry, measured coordinates, hand shapes, clock calculations, and SVG rendering.
 - `src/components/WatchStage.tsx` — page layout and cream background.
+- `src/screensaver.tsx` — standalone button-free screensaver entry point.
+- `macos/WatchScreensaver/` — native `ScreenSaverView` wrapper.
+- `macos/build-screensaver.sh` — universal `.saver` bundle builder.
 - `src/routes/__root.tsx` — document shell and Google Fonts import.
 - `src/styles.css` — global styling and font variables.
 - `public/reference-ortho.jpg` — original orthographic baseline.

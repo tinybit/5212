@@ -1,4 +1,7 @@
 node_modules/
+build/
+dist-screensaver/
+.DS_Store
 .project_id
 .github_repo
 .env

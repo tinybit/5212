@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@source "./";
 
 @theme {
   --color-bg: #e8e8ea;
@@ -44,5 +45,15 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@keyframes screensaver-seconds-hand {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
