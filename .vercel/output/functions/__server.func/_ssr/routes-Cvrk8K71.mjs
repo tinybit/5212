@@ -1,8 +1,42 @@
 import { r as __toESM } from "../_runtime.mjs";
 import { M as require_react, h as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-CweJH8WP.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-Cvrk8K71.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
+function isoWeekCoordinates(date) {
+	const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+	const dayNumber = target.getUTCDay() || 7;
+	target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+	const year = target.getUTCFullYear();
+	const yearStart = new Date(Date.UTC(year, 0, 1));
+	return {
+		week: Math.ceil(((target.getTime() - yearStart.getTime()) / 864e5 + 1) / 7),
+		year
+	};
+}
+function continuousIsoWeek(date, anchorIsoWeekYear, weekCount) {
+	const isoWeek = isoWeekCoordinates(date);
+	return isoWeek.week + (isoWeek.year - anchorIsoWeekYear) * weekCount;
+}
+function localCalendarDayOrdinal(date) {
+	return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
+}
+function calendarMonthOrdinal(date) {
+	return date.getFullYear() * 12 + date.getMonth();
+}
+function unwrapCyclicAngles(angles) {
+	let previous = Number.NEGATIVE_INFINITY;
+	return angles.map((angle) => {
+		let unwrapped = angle;
+		while (unwrapped <= previous) unwrapped += 360;
+		previous = unwrapped;
+		return unwrapped;
+	});
+}
+function continuousDateWheelAngle(date, anchorMonthOrdinal, unwrappedDayAngles) {
+	const monthTurns = calendarMonthOrdinal(date) - anchorMonthOrdinal;
+	return unwrappedDayAngles[date.getDate() - 1] + monthTurns * 360;
+}
 function subtract3(a, b) {
 	return {
 		x: a.x - b.x,
@@ -69,41 +103,82 @@ function linearToSrgb(channel) {
 function toneMap(channel) {
 	return 1 - Math.exp(-Math.max(0, channel) * 1.6);
 }
-function shadeMetalFacet(normal, center, lightPosition, lightBrightness, referenceDistance) {
-	const toLightVector = subtract3(lightPosition, center);
-	const distance = Math.hypot(toLightVector.x, toLightVector.y, toLightVector.z);
-	const toLight = normalize3(toLightVector);
-	const diffuse = Math.max(0, dot3(normal, toLight));
-	const attenuation = Math.min(1.35, Math.max(.5, (referenceDistance / distance) ** 2));
+var BLACKENED_WHITE_GOLD = {
+	baseColor: [
+		10,
+		11,
+		10
+	],
+	environmentStrength: .7,
+	areaSpecularStrength: .3,
+	highlightExponent: 5,
+	strokeScale: .45
+};
+var DEEP_BLACK_PVD = {
+	baseColor: [
+		3,
+		4,
+		3
+	],
+	environmentStrength: .5,
+	areaSpecularStrength: .018,
+	highlightExponent: 5,
+	strokeScale: .45
+};
+var POLISHED_BLACK_PVD = {
+	baseColor: [
+		3,
+		4,
+		3
+	],
+	environmentStrength: .5,
+	areaSpecularStrength: .35,
+	highlightExponent: 64,
+	strokeScale: .45,
+	facingReflectionStrength: .3
+};
+var GLOSSY_RED_PAINT = {
+	baseColor: [
+		155,
+		18,
+		30
+	],
+	ambientStrength: .55,
+	diffuseStrength: .55,
+	specularStrength: .18,
+	highlightExponent: 26
+};
+function shadeMetalFacet(normal, center, lightPosition, lightBrightness, material = BLACKENED_WHITE_GOLD) {
+	const toLight = normalize3(subtract3(lightPosition, center));
+	const lightVisibility = Math.max(0, dot3(normal, toLight));
 	const halfVector = normalize3({
 		x: toLight.x,
 		y: toLight.y,
 		z: toLight.z + 1
 	});
-	const specular = Math.pow(Math.max(0, dot3(normal, halfVector)), 38) * .7 * attenuation * lightBrightness * diffuse;
-	const level = .12 + diffuse * .95 * attenuation * lightBrightness;
-	const channels = [
-		72,
-		74,
-		71
-	].map((channel) => linearToSrgb(toneMap(srgbToLinear(channel) * level + specular)));
+	const areaHighlight = Math.pow(Math.max(0, dot3(normal, halfVector)), material.highlightExponent) * lightVisibility * material.areaSpecularStrength * Math.max(0, lightBrightness);
+	const facingReflection = Math.pow(lightVisibility, 4) * Math.hypot(toLight.x, toLight.y) * (material.facingReflectionStrength ?? 0) * Math.max(0, lightBrightness);
+	const channels = material.baseColor.map((channel) => linearToSrgb(toneMap(srgbToLinear(channel) * material.environmentStrength + areaHighlight + facingReflection)));
 	return {
 		fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
-		stroke: `rgb(${Math.round(channels[0] * .55)} ${Math.round(channels[1] * .55)} ${Math.round(channels[2] * .55)})`
+		stroke: `rgb(${Math.round(channels[0] * material.strokeScale)} ${Math.round(channels[1] * material.strokeScale)} ${Math.round(channels[2] * material.strokeScale)})`
 	};
 }
-function lightShadowOffset(lightPosition, objectHeight, center, maxDistance = 52) {
-	const lightX = lightPosition.x - center.x;
-	const lightY = lightPosition.y - center.y;
-	const horizontalDistance = Math.hypot(lightX, lightY);
-	if (horizontalDistance < 1e-6) return {
-		dx: 0,
-		dy: 0
-	};
-	const projectedDistance = Math.min(maxDistance, objectHeight * horizontalDistance / Math.max(lightPosition.z, 1));
+function shadeGlossyPaintFacet(normal, center, lightPosition, lightBrightness, material = GLOSSY_RED_PAINT) {
+	const toLight = normalize3(subtract3(lightPosition, center));
+	const lightVisibility = Math.max(0, dot3(normal, toLight));
+	const halfVector = normalize3({
+		x: toLight.x,
+		y: toLight.y,
+		z: toLight.z + 1
+	});
+	const brightness = Math.max(0, lightBrightness);
+	const pigmentLevel = material.ambientStrength + material.diffuseStrength * lightVisibility * brightness;
+	const specular = Math.pow(Math.max(0, dot3(normal, halfVector)), material.highlightExponent) * material.specularStrength * brightness * lightVisibility;
+	const channels = material.baseColor.map((channel) => linearToSrgb(toneMap(srgbToLinear(channel) * pigmentLevel + specular)));
 	return {
-		dx: -lightX / horizontalDistance * projectedDistance,
-		dy: -lightY / horizontalDistance * projectedDistance
+		fill: `rgb(${channels[0]} ${channels[1]} ${channels[2]})`,
+		stroke: `rgb(${Math.round(channels[0] * .46)} ${Math.round(channels[1] * .46)} ${Math.round(channels[2] * .46)})`
 	};
 }
 function dateWindowLightModel(position, brightness, settings) {
@@ -142,6 +217,9 @@ var R_WEEK_OUT = 928;
 var R_DIAL_EDGE = 1030;
 var DATE_RING_DEFAULT_RADIUS = 826.868626390606;
 var DATE_RING_OPACITY = 1;
+/** Calibrated date-ring center offset in rendered pixels. */
+var DATE_RING_OFFSET_X = -3;
+var DATE_RING_OFFSET_Y = 1;
 var DATE_WHEEL_CALIBRATION = {
 	dayCount: 31,
 	initialDay: 1,
@@ -182,6 +260,7 @@ var DATE_WHEEL_CALIBRATION = {
 		74.5
 	]
 };
+var DATE_WHEEL_UNWRAPPED_ANGLES = unwrapCyclicAngles(DATE_WHEEL_CALIBRATION.measuredAnglesDeg);
 var SHADOW_CROP_X = 1999;
 var SHADOW_CROP_Y = 1245;
 var SHADOW_CROP_WIDTH = 200;
@@ -563,11 +642,12 @@ var PHOTO_LABEL = [
 	"Photo: 50%",
 	"Photo: OFF"
 ];
+var publicAsset = (fileName) => `/${fileName}`;
 var REFERENCE_IMAGES = [{
-	src: "/reference-ortho-cream.jpg",
+	src: publicAsset("reference-ortho-cream.jpg"),
 	label: "Reference: 1"
 }, {
-	src: "/reference-handless-date-cutout.png",
+	src: publicAsset("reference-handless-date-cutout.png"),
 	label: "Reference: 2"
 }];
 var HAND_OPTIONS = [
@@ -758,13 +838,6 @@ function annularSectorPath(angleDeg, radius, halfThickness, halfLength) {
 		"Z"
 	].join(" ");
 }
-function isoWeekNumber(date) {
-	const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-	const dayNumber = target.getUTCDay() || 7;
-	target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
-	const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-	return Math.ceil(((target.getTime() - yearStart.getTime()) / 864e5 + 1) / 7);
-}
 var MARKER_PRISM_HEIGHT = 34;
 var LIGHT_HEMISPHERE_RADIUS = R_DIAL_EDGE * 6;
 function markerWorldPoint(point, angle, lateralOffset) {
@@ -778,8 +851,33 @@ function markerWorldPoint(point, angle, lateralOffset) {
 		z: rotated.z
 	};
 }
-function markerFacetColor(localNormal, localCenter, markerAngle, lateralOffset, lightPosition, lightBrightness) {
-	return shadeMetalFacet(normalize3(rotateVector(localNormal, markerAngle)), markerWorldPoint(localCenter, markerAngle, lateralOffset), lightPosition, lightBrightness, LIGHT_HEMISPHERE_RADIUS);
+function markerFacetColor(localNormal, localCenter, markerAngle, lateralOffset, lightPosition, lightBrightness, material) {
+	return shadeMetalFacet(normalize3(rotateVector(localNormal, markerAngle)), markerWorldPoint(localCenter, markerAngle, lateralOffset), lightPosition, lightBrightness, material);
+}
+function flatPvdGradientStops({ baseAngle, rotation, startRadius, endRadius, lightPosition, lightBrightness, count = 7 }) {
+	const effectiveLightPosition = {
+		...lightPosition,
+		z: Math.max(lightPosition.z, LIGHT_HEMISPHERE_RADIUS * .32)
+	};
+	const angle = baseAngle + rotation;
+	return Array.from({ length: count }, (_, index) => {
+		const offset = index / (count - 1);
+		const radius = startRadius + (endRadius - startRadius) * offset;
+		const worldPoint = {
+			...handPoint(angle, radius, 0),
+			z: 0
+		};
+		const distanceToLight = Math.hypot(effectiveLightPosition.x - worldPoint.x, effectiveLightPosition.y - worldPoint.y, effectiveLightPosition.z);
+		const spatialFalloff = Math.min(2.8, Math.max(.35, (LIGHT_HEMISPHERE_RADIUS / distanceToLight) ** 6.5));
+		return {
+			offset,
+			color: shadeMetalFacet({
+				x: 0,
+				y: 0,
+				z: 1
+			}, worldPoint, effectiveLightPosition, lightBrightness * spatialFalloff, DEEP_BLACK_PVD)
+		};
+	});
 }
 function handPrismPoint(along, lateral, height) {
 	return {
@@ -788,37 +886,17 @@ function handPrismPoint(along, lateral, height) {
 		z: height
 	};
 }
-function LitHandPrism({ angle, faces, lightBrightness, lightPosition, prismHeight, shadowId }) {
-	const shadowOffset = lightShadowOffset(lightPosition, prismHeight, {
-		x: CX,
-		y: CY
-	});
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("defs", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("filter", {
-		id: shadowId,
-		x: "-30%",
-		y: "-30%",
-		width: "170%",
-		height: "170%",
-		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("feDropShadow", {
-			dx: shadowOffset.dx,
-			dy: shadowOffset.dy,
-			stdDeviation: "4",
-			floodColor: "#000000",
-			floodOpacity: .16 * Math.min(2, lightBrightness)
-		})
-	}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("g", {
-		filter: `url(#${shadowId})`,
-		children: faces.map((face) => {
-			const color = markerFacetColor(face.normal, averagePoints(face.points), angle, 0, lightPosition, lightBrightness);
-			return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
-				d: ptsToPath(face.points.map((point) => markerWorldPoint(point, angle, 0))),
-				fill: color.fill,
-				stroke: color.stroke,
-				strokeWidth: 2,
-				strokeLinejoin: "round"
-			}, face.key);
-		})
-	})] });
+function LitHandPrism({ angle, faces, lightBrightness, lightPosition }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_jsx_runtime.Fragment, { children: faces.map((face) => {
+		const color = markerFacetColor(face.normal, averagePoints(face.points), angle, 0, lightPosition, lightBrightness, POLISHED_BLACK_PVD);
+		return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+			d: ptsToPath(face.points.map((point) => markerWorldPoint(point, angle, 0))),
+			fill: color.fill,
+			stroke: color.stroke,
+			strokeWidth: 2,
+			strokeLinejoin: "round"
+		}, face.key);
+	}) });
 }
 function FlatHourBaton({ degFrom12, lateralOffset = 0 }) {
 	const x0 = CX;
@@ -964,88 +1042,65 @@ function LitHourBaton({ degFrom12, lightBrightness, lightPosition, lateralOffset
 		y: -588,
 		z: 0
 	};
-	const shadowOffset = lightShadowOffset(lightPosition, MARKER_PRISM_HEIGHT, {
-		x: CX,
-		y: CY
+	const innerLeftNormal = faceNormal(innerTip, innerLeft, innerRidge);
+	const innerRightNormal = faceNormal(innerTip, innerRidge, innerRight);
+	const innerNormal = normalize3({
+		x: innerLeftNormal.x + innerRightNormal.x,
+		y: innerLeftNormal.y + innerRightNormal.y,
+		z: innerLeftNormal.z + innerRightNormal.z
 	});
-	const shadowId = `hour-marker-shadow-${degFrom12}-${lateralOffset}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-	const faces = [
-		{
-			key: "left",
-			points: [
-				outerLeft,
-				outerRidge,
-				innerRidge,
-				innerLeft
-			],
-			normal: faceNormal(outerLeft, outerRidge, innerRidge)
-		},
-		{
-			key: "right",
-			points: [
-				outerRight,
-				innerRight,
-				innerRidge,
-				outerRidge
-			],
-			normal: faceNormal(outerRight, innerRight, innerRidge)
-		},
-		{
-			key: "outer",
-			points: [
-				outerLeft,
-				outerRight,
-				outerRidge
-			],
-			normal: faceNormal(outerLeft, outerRight, outerRidge)
-		},
-		{
-			key: "inner-left",
-			points: [
-				innerTip,
-				innerLeft,
-				innerRidge
-			],
-			normal: faceNormal(innerTip, innerLeft, innerRidge)
-		},
-		{
-			key: "inner-right",
-			points: [
-				innerTip,
-				innerRidge,
-				innerRight
-			],
-			normal: faceNormal(innerTip, innerRidge, innerRight)
-		}
-	];
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("g", {
 		"data-lit-hour-marker": true,
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("defs", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("filter", {
-			id: shadowId,
-			x: "-40%",
-			y: "-40%",
-			width: "180%",
-			height: "180%",
-			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("feDropShadow", {
-				dx: shadowOffset.dx,
-				dy: shadowOffset.dy,
-				stdDeviation: "3",
-				floodColor: "#000000",
-				floodOpacity: .14 * Math.min(2, lightBrightness)
-			})
-		}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("g", {
-			filter: `url(#${shadowId})`,
-			children: faces.map((face) => {
-				const color = markerFacetColor(face.normal, averagePoints(face.points), degFrom12, lateralOffset, lightPosition, lightBrightness);
-				return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
-					d: ptsToPath(face.points.map((point) => markerWorldPoint(point, degFrom12, lateralOffset))),
-					fill: color.fill,
-					stroke: color.stroke,
-					strokeWidth: 1.5,
-					strokeLinejoin: "round"
-				}, face.key);
-			})
-		})]
+		children: [
+			{
+				key: "left",
+				points: [
+					outerLeft,
+					outerRidge,
+					innerRidge,
+					innerLeft
+				],
+				normal: faceNormal(outerLeft, outerRidge, innerRidge)
+			},
+			{
+				key: "right",
+				points: [
+					outerRight,
+					innerRight,
+					innerRidge,
+					outerRidge
+				],
+				normal: faceNormal(outerRight, innerRight, innerRidge)
+			},
+			{
+				key: "outer",
+				points: [
+					outerLeft,
+					outerRight,
+					outerRidge
+				],
+				normal: faceNormal(outerLeft, outerRight, outerRidge)
+			},
+			{
+				key: "inner",
+				points: [
+					innerTip,
+					innerLeft,
+					innerRidge,
+					innerRight
+				],
+				normal: innerNormal
+			}
+		].map((face) => {
+			const color = markerFacetColor(face.normal, averagePoints(face.points), degFrom12, lateralOffset, lightPosition, lightBrightness);
+			return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+				d: ptsToPath(face.points.map((point) => markerWorldPoint(point, degFrom12, lateralOffset))),
+				fill: color.fill,
+				stroke: color.stroke,
+				strokeWidth: 1.5,
+				strokeLinejoin: "round"
+			}, face.key);
+		})
 	});
 }
 function DateWindowLighting({ brightness, position, settings }) {
@@ -1164,14 +1219,32 @@ function DateWindowLighting({ brightness, position, settings }) {
 		]
 	});
 }
-function HemisphereLightControl({ brightness, dateWindowLight, position, onBrightnessChange, onChange, onDateWindowLightChange }) {
-	const panelRef = (0, import_react.useRef)(null);
+var CONTROL_TABS = [
+	{
+		id: "time",
+		label: "Time"
+	},
+	{
+		id: "layers",
+		label: "Layers"
+	},
+	{
+		id: "light",
+		label: "Light"
+	}
+];
+/** Shared styling for buttons inside the control window. */
+function panelButtonClass(active = false) {
+	return `rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${active ? "border-black bg-black text-white hover:bg-zinc-800" : "border-black/25 bg-white text-black hover:bg-zinc-100"}`;
+}
+function ControlPanel({ brightness, dateWindowLight, layersTab, position, timeTab, onBrightnessChange, onChange, onDateWindowLightChange }) {
 	const diskRef = (0, import_react.useRef)(null);
 	const panelDragRef = (0, import_react.useRef)(null);
 	const [panelOffset, setPanelOffset] = (0, import_react.useState)({
 		x: 0,
 		y: 0
 	});
+	const [activeTab, setActiveTab] = (0, import_react.useState)("time");
 	const radius = Math.hypot(position.u, position.v);
 	const elevation = Math.asin(Math.sqrt(Math.max(0, 1 - radius * radius))) * 180 / Math.PI;
 	const azimuth = Math.atan2(position.u, -position.v) * 180 / Math.PI;
@@ -1235,15 +1308,10 @@ function HemisphereLightControl({ brightness, dateWindowLight, position, onBrigh
 	};
 	const movePanel = (clientX, clientY) => {
 		const drag = panelDragRef.current;
-		const bounds = panelRef.current?.getBoundingClientRect();
-		if (!drag || !bounds) return;
-		const requestedX = clientX - drag.x;
-		const requestedY = clientY - drag.y;
-		const deltaX = Math.min(window.innerWidth - bounds.right, Math.max(-bounds.left, requestedX));
-		const deltaY = Math.min(window.innerHeight - bounds.bottom, Math.max(-bounds.top, requestedY));
+		if (!drag) return;
 		setPanelOffset((offset) => ({
-			x: offset.x + deltaX,
-			y: offset.y + deltaY
+			x: offset.x + (clientX - drag.x),
+			y: offset.y + (clientY - drag.y)
 		}));
 		panelDragRef.current = {
 			...drag,
@@ -1252,14 +1320,13 @@ function HemisphereLightControl({ brightness, dateWindowLight, position, onBrigh
 		};
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		ref: panelRef,
-		className: "fixed left-32 top-1/2 z-[100] w-48 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur",
-		style: { transform: `translate(${panelOffset.x}px, calc(-50% + ${panelOffset.y}px))` },
+		className: "fixed left-6 top-16 z-[100] w-64 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur",
+		style: { transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` },
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				role: "button",
 				tabIndex: 0,
-				"aria-label": "Drag marker light panel",
+				"aria-label": "Drag control window",
 				className: "mb-2 touch-none select-none text-center text-xs font-semibold text-black cursor-move",
 				onPointerDown: (event) => {
 					event.currentTarget.setPointerCapture(event.pointerId);
@@ -1292,110 +1359,223 @@ function HemisphereLightControl({ brightness, dateWindowLight, position, onBrigh
 						y: offset.y + delta[1]
 					}));
 				},
-				children: "Marker light"
+				children: "Controls"
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				ref: diskRef,
-				role: "slider",
-				tabIndex: 0,
-				"aria-label": "Hour marker light position",
-				"aria-valuemin": 0,
-				"aria-valuemax": 90,
-				"aria-valuenow": Math.round(elevation),
-				"aria-valuetext": `${Math.round(azimuth)} degrees azimuth, ${Math.round(elevation)} degrees elevation`,
-				onPointerDown: (event) => {
-					event.currentTarget.setPointerCapture(event.pointerId);
-					updateFromPointer(event.clientX, event.clientY);
-				},
-				onPointerMove: (event) => {
-					if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event.clientX, event.clientY);
-				},
-				onKeyDown: (event) => {
-					const step = event.shiftKey ? .02 : .06;
-					const delta = {
-						ArrowLeft: [-step, 0],
-						ArrowRight: [step, 0],
-						ArrowUp: [0, -step],
-						ArrowDown: [0, step]
-					}[event.key];
-					if (!delta) return;
-					event.preventDefault();
-					onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
-				},
-				className: "relative mx-auto h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				role: "tablist",
+				"aria-label": "Control groups",
+				className: "mb-3 grid grid-cols-3 gap-1 rounded-lg bg-black/10 p-1",
+				children: CONTROL_TABS.map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					role: "tab",
+					"aria-selected": activeTab === tab.id,
+					onClick: () => setActiveTab(tab.id),
+					className: `rounded-md px-2 py-1 text-[11px] font-semibold transition ${activeTab === tab.id ? "bg-black text-white" : "text-black hover:bg-black/10"}`,
+					children: tab.label
+				}, tab.id))
+			}),
+			activeTab === "time" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				role: "tabpanel",
+				children: timeTab
+			}),
+			activeTab === "layers" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				role: "tabpanel",
+				children: layersTab
+			}),
+			activeTab === "light" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				role: "tabpanel",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md",
-						style: {
-							left: `${(position.u + 1) * 50}%`,
-							top: `${(position.v + 1) * 50}%`
-						}
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						ref: diskRef,
+						role: "slider",
+						tabIndex: 0,
+						"aria-label": "Hour marker light position",
+						"aria-valuemin": 0,
+						"aria-valuemax": 90,
+						"aria-valuenow": Math.round(elevation),
+						"aria-valuetext": `${Math.round(azimuth)} degrees azimuth, ${Math.round(elevation)} degrees elevation`,
+						onPointerDown: (event) => {
+							event.currentTarget.setPointerCapture(event.pointerId);
+							updateFromPointer(event.clientX, event.clientY);
+						},
+						onPointerMove: (event) => {
+							if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event.clientX, event.clientY);
+						},
+						onKeyDown: (event) => {
+							const step = event.shiftKey ? .02 : .06;
+							const delta = {
+								ArrowLeft: [-step, 0],
+								ArrowRight: [step, 0],
+								ArrowUp: [0, -step],
+								ArrowDown: [0, step]
+							}[event.key];
+							if (!delta) return;
+							event.preventDefault();
+							onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
+						},
+						className: "relative mx-auto h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md",
+								style: {
+									left: `${(position.u + 1) * 50}%`,
+									top: `${(position.v + 1) * 50}%`
+								}
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-2 text-center text-[10px] tabular-nums text-black",
+						children: [
+							Math.round(azimuth),
+							"° / ",
+							Math.round(elevation),
+							"°"
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "mt-2 block text-[10px] font-semibold text-black",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "flex items-center justify-between gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Brightness" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
+								className: "tabular-nums",
+								children: [Math.round(brightness * 100), "%"]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "range",
+							min: 0,
+							max: 200,
+							step: 1,
+							value: brightness * 100,
+							onChange: (event) => onBrightnessChange(Number(event.target.value) / 100),
+							className: "mt-1 w-full cursor-pointer accent-black",
+							"aria-label": "Marker light brightness"
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-3 border-t border-black/15 pt-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mb-1 text-[10px] font-bold text-black",
+							children: "Date window"
+						}), dateWindowControls.map((control) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+							className: "mt-1.5 block text-[10px] font-semibold text-black",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "flex items-center justify-between gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: control.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("output", {
+									className: "tabular-nums",
+									children: control.valueText
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								type: "range",
+								min: control.min,
+								max: control.max,
+								step: control.step,
+								value: dateWindowLight[control.key],
+								onChange: (event) => onDateWindowLightChange({
+									...dateWindowLight,
+									[control.key]: Number(event.target.value)
+								}),
+								className: "mt-0.5 w-full cursor-pointer accent-black",
+								"aria-label": `Date window ${control.label.toLowerCase()}`
+							})]
+						}, control.key))]
 					})
 				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "mt-2 text-center text-[10px] tabular-nums text-black",
-				children: [
-					Math.round(azimuth),
-					"° / ",
-					Math.round(elevation),
-					"°"
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-				className: "mt-2 block text-[10px] font-semibold text-black",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "flex items-center justify-between gap-2",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Brightness" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
-						className: "tabular-nums",
-						children: [Math.round(brightness * 100), "%"]
-					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-					type: "range",
-					min: 0,
-					max: 200,
-					step: 1,
-					value: brightness * 100,
-					onChange: (event) => onBrightnessChange(Number(event.target.value) / 100),
-					className: "mt-1 w-full cursor-pointer accent-black",
-					"aria-label": "Marker light brightness"
-				})]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "mt-3 border-t border-black/15 pt-2",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-					className: "mb-1 text-[10px] font-bold text-black",
-					children: "Date window"
-				}), dateWindowControls.map((control) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-					className: "mt-1.5 block text-[10px] font-semibold text-black",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-						className: "flex items-center justify-between gap-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: control.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("output", {
-							className: "tabular-nums",
-							children: control.valueText
-						})]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "range",
-						min: control.min,
-						max: control.max,
-						step: control.step,
-						value: dateWindowLight[control.key],
-						onChange: (event) => onDateWindowLightChange({
-							...dateWindowLight,
-							[control.key]: Number(event.target.value)
-						}),
-						className: "mt-0.5 w-full cursor-pointer accent-black",
-						"aria-label": `Date window ${control.label.toLowerCase()}`
-					})]
-				}, control.key))]
 			})
 		]
 	});
 }
-function WeekIndicatorHand({ rotation }) {
+function LitAnnularPaintCapsule({ baseAngle, halfLength, halfThickness, lightBrightness, lightPosition, radius, rotation }) {
+	const alongSegments = 32;
+	const crossSegments = 10;
+	const paintHeight = halfThickness * .55;
+	const endRoundingLength = halfThickness * .55;
+	const surfacePoint = (alongIndex, crossIndex) => {
+		const alongT = alongIndex / alongSegments;
+		const crossT = crossIndex / crossSegments * 2 - 1;
+		const along = -halfLength + alongT * halfLength * 2;
+		const across = crossT * halfThickness;
+		const crossProfile = Math.sqrt(Math.max(0, 1 - (across / halfThickness) ** 2));
+		const distanceFromEnd = halfLength - Math.abs(along);
+		const endProgress = Math.min(1, Math.max(0, distanceFromEnd / endRoundingLength));
+		const endProfile = Math.sqrt(Math.max(0, 1 - (1 - endProgress) ** 2));
+		const height = paintHeight * crossProfile * endProfile;
+		const localAngle = baseAngle + along / radius * (180 / Math.PI);
+		const worldAngle = localAngle + rotation;
+		const localPoint = polarPoint(localAngle, radius + across);
+		const worldPoint2d = polarPoint(worldAngle, radius + across);
+		const worldRadians = worldAngle * Math.PI / 180;
+		const tangent = {
+			x: Math.cos(worldRadians),
+			y: Math.sin(worldRadians)
+		};
+		const radial = {
+			x: Math.sin(worldRadians),
+			y: -Math.cos(worldRadians)
+		};
+		const crossDerivative = -paintHeight * endProfile * across / (halfThickness ** 2 * Math.max(1e-4, crossProfile));
+		const endDerivative = endProgress < 1 ? paintHeight * crossProfile * (1 - endProgress) * (along < 0 ? 1 : -1) / (endRoundingLength * Math.max(1e-4, endProfile)) : 0;
+		const tangentScale = (radius + across) / radius;
+		const normal = normalize3({
+			x: tangent.x * (-endDerivative / tangentScale) + radial.x * -crossDerivative,
+			y: tangent.y * (-endDerivative / tangentScale) + radial.y * -crossDerivative,
+			z: 1
+		});
+		return {
+			localPoint,
+			worldPoint: {
+				...worldPoint2d,
+				z: height
+			},
+			normal
+		};
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("g", {
+		"data-paint-rendering": "annular-half-cylinder",
+		children: Array.from({ length: alongSegments }, (_, alongIndex) => Array.from({ length: crossSegments }, (__, crossIndex) => {
+			const corners = [
+				surfacePoint(alongIndex, crossIndex),
+				surfacePoint(alongIndex, crossIndex + 1),
+				surfacePoint(alongIndex + 1, crossIndex + 1),
+				surfacePoint(alongIndex + 1, crossIndex)
+			];
+			const color = shadeGlossyPaintFacet(normalize3(corners.reduce((sum, corner) => ({
+				x: sum.x + corner.normal.x / corners.length,
+				y: sum.y + corner.normal.y / corners.length,
+				z: sum.z + corner.normal.z / corners.length
+			}), {
+				x: 0,
+				y: 0,
+				z: 0
+			})), averagePoints(corners.map((corner) => corner.worldPoint)), lightPosition, lightBrightness);
+			return {
+				key: `${alongIndex}-${crossIndex}`,
+				path: ptsToPath(corners.map((corner) => corner.localPoint)),
+				color
+			};
+		})).flat().map((facet) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+			d: facet.path,
+			fill: facet.color.fill,
+			stroke: facet.color.fill,
+			strokeWidth: .7,
+			strokeLinejoin: "round"
+		}, facet.key))
+	});
+}
+function WeekIndicatorHand({ lightBrightness, lightPosition, mode, rotation }) {
+	const dynamicallyLit = mode === "3d";
+	const shaftStart = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, 0);
 	const headCenter = handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, 0);
+	const litShaftStops = flatPvdGradientStops({
+		baseAngle: WEEK_HAND_ANGLE_DEG,
+		rotation,
+		startRadius: WEEK_HAND_SHAFT_START_RADIUS,
+		endRadius: WEEK_HAND_HEAD_RADIUS,
+		lightPosition,
+		lightBrightness
+	});
 	const shaft = [
 		handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_SHAFT_START_RADIUS, -6.48),
 		handPoint(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, -6.48),
@@ -1405,6 +1585,7 @@ function WeekIndicatorHand({ rotation }) {
 	const headPath = annularSectorPath(WEEK_HAND_ANGLE_DEG, WEEK_HAND_HEAD_RADIUS, WEEK_HAND_HEAD_HALF_THICKNESS, WEEK_HAND_HEAD_HALF_LENGTH);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
 		"data-week-indicator-hand": true,
+		"data-hand-rendering": dynamicallyLit ? "lit-flat" : "flat",
 		style: {
 			transform: `rotate(${rotation}deg)`,
 			transformOrigin: `${CX}px ${CY}px`,
@@ -1463,6 +1644,18 @@ function WeekIndicatorHand({ rotation }) {
 					})
 				]
 			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("linearGradient", {
+				id: "week-hand-shaft-lit-gradient",
+				gradientUnits: "userSpaceOnUse",
+				x1: shaftStart.x,
+				y1: shaftStart.y,
+				x2: headCenter.x,
+				y2: headCenter.y,
+				children: litShaftStops.map((stop) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+					offset: `${stop.offset * 100}%`,
+					stopColor: stop.color.fill
+				}, stop.offset))
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("filter", {
 				id: "week-hand-shadow",
 				x: "-30%",
@@ -1474,17 +1667,25 @@ function WeekIndicatorHand({ rotation }) {
 					dy: "6",
 					stdDeviation: "4",
 					floodColor: "#000000",
-					floodOpacity: "0.24"
+					floodOpacity: "0.12"
 				})
 			})
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
-			filter: "url(#week-hand-shadow)",
+			filter: dynamicallyLit ? void 0 : "url(#week-hand-shadow)",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 				d: ptsToPath(shaft),
-				fill: "url(#week-hand-shaft-gradient)",
-				stroke: "#171815",
+				fill: dynamicallyLit ? "url(#week-hand-shaft-lit-gradient)" : "url(#week-hand-shaft-gradient)",
+				stroke: dynamicallyLit ? litShaftStops[0].color.stroke : "#171815",
 				strokeWidth: 1.44
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+			}), dynamicallyLit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LitAnnularPaintCapsule, {
+				baseAngle: WEEK_HAND_ANGLE_DEG,
+				halfLength: WEEK_HAND_HEAD_HALF_LENGTH,
+				halfThickness: WEEK_HAND_HEAD_HALF_THICKNESS,
+				lightBrightness,
+				lightPosition,
+				radius: WEEK_HAND_HEAD_RADIUS,
+				rotation
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 				d: headPath,
 				fill: "url(#week-hand-head-gradient)",
 				stroke: "#8f1d28",
@@ -1494,8 +1695,18 @@ function WeekIndicatorHand({ rotation }) {
 		})]
 	});
 }
-function DayIndicatorHand({ rotation }) {
+function DayIndicatorHand({ lightBrightness, lightPosition, mode, rotation }) {
+	const dynamicallyLit = mode === "3d";
+	const shaftStart = handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, 0);
 	const headCenter = handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, 0);
+	const litShaftStops = flatPvdGradientStops({
+		baseAngle: DAY_HAND_ANGLE_DEG,
+		rotation,
+		startRadius: DAY_HAND_SHAFT_START_RADIUS,
+		endRadius: DAY_HAND_HEAD_RADIUS,
+		lightPosition,
+		lightBrightness
+	});
 	const shaft = [
 		handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_SHAFT_START_RADIUS, -7.5),
 		handPoint(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, -7.5),
@@ -1505,6 +1716,7 @@ function DayIndicatorHand({ rotation }) {
 	const headPath = annularSectorPath(DAY_HAND_ANGLE_DEG, DAY_HAND_HEAD_RADIUS, DAY_HAND_HEAD_HALF_THICKNESS, DAY_HAND_HEAD_HALF_LENGTH);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
 		"data-day-indicator-hand": true,
+		"data-hand-rendering": dynamicallyLit ? "lit-flat" : "flat",
 		style: {
 			transform: `rotate(${rotation}deg)`,
 			transformOrigin: `${CX}px ${CY}px`,
@@ -1555,6 +1767,18 @@ function DayIndicatorHand({ rotation }) {
 					})
 				]
 			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("linearGradient", {
+				id: "day-hand-shaft-lit-gradient",
+				gradientUnits: "userSpaceOnUse",
+				x1: shaftStart.x,
+				y1: shaftStart.y,
+				x2: headCenter.x,
+				y2: headCenter.y,
+				children: litShaftStops.map((stop) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+					offset: `${stop.offset * 100}%`,
+					stopColor: stop.color.fill
+				}, stop.offset))
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("filter", {
 				id: "day-hand-shadow",
 				x: "-30%",
@@ -1566,17 +1790,25 @@ function DayIndicatorHand({ rotation }) {
 					dy: "6",
 					stdDeviation: "4",
 					floodColor: "#000000",
-					floodOpacity: "0.24"
+					floodOpacity: "0.12"
 				})
 			})
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
-			filter: "url(#day-hand-shadow)",
+			filter: dynamicallyLit ? void 0 : "url(#day-hand-shadow)",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 				d: ptsToPath(shaft),
-				fill: "url(#day-hand-shaft-gradient)",
-				stroke: "#363633",
+				fill: dynamicallyLit ? "url(#day-hand-shaft-lit-gradient)" : "url(#day-hand-shaft-gradient)",
+				stroke: dynamicallyLit ? litShaftStops[0].color.stroke : "#363633",
 				strokeWidth: 1.4
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
+			}), dynamicallyLit ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LitAnnularPaintCapsule, {
+				baseAngle: DAY_HAND_ANGLE_DEG,
+				halfLength: DAY_HAND_HEAD_HALF_LENGTH,
+				halfThickness: DAY_HAND_HEAD_HALF_THICKNESS,
+				lightBrightness,
+				lightPosition,
+				radius: DAY_HAND_HEAD_RADIUS,
+				rotation
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 				d: headPath,
 				fill: "url(#day-hand-head-gradient)",
 				stroke: "#8e2530",
@@ -1626,9 +1858,7 @@ function HourHand({ lightBrightness, lightPosition, mode, rotation }) {
 				angle: HOUR_HAND_ANGLE_DEG + rotation,
 				faces,
 				lightBrightness,
-				lightPosition,
-				prismHeight: HOUR_HAND_PRISM_HEIGHT,
-				shadowId: "hour-hand-3d-shadow"
+				lightPosition
 			})
 		});
 	}
@@ -1690,7 +1920,7 @@ function HourHand({ lightBrightness, lightPosition, mode, rotation }) {
 					dy: "6",
 					stdDeviation: "4",
 					floodColor: "#000000",
-					floodOpacity: "0.25"
+					floodOpacity: "0.125"
 				})
 			})
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
@@ -1767,9 +1997,7 @@ function MinuteHand({ lightBrightness, lightPosition, mode, rotation }) {
 				angle: MINUTE_HAND_ANGLE_DEG + rotation,
 				faces,
 				lightBrightness,
-				lightPosition,
-				prismHeight: MINUTE_HAND_PRISM_HEIGHT,
-				shadowId: "minute-hand-3d-shadow"
+				lightPosition
 			})
 		});
 	}
@@ -1831,7 +2059,7 @@ function MinuteHand({ lightBrightness, lightPosition, mode, rotation }) {
 					dy: "6",
 					stdDeviation: "4",
 					floodColor: "#000000",
-					floodOpacity: "0.25"
+					floodOpacity: "0.125"
 				})
 			})
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
@@ -1872,7 +2100,7 @@ function MinuteHand({ lightBrightness, lightPosition, mode, rotation }) {
 		})]
 	});
 }
-function SecondsHand({ rotation }) {
+function SecondsHand({ animatedOffsetSeconds, lightBrightness, lightPosition, mode, rotation }) {
 	const upperBlade = [
 		{
 			x: CX - SECOND_HAND_TIP_HALF_W,
@@ -1913,9 +2141,72 @@ function SecondsHand({ rotation }) {
 			y: SECOND_HAND_TAIL_END_Y
 		}
 	];
+	const effectiveAreaLightPosition = {
+		...lightPosition,
+		z: Math.max(lightPosition.z, LIGHT_HEMISPHERE_RADIUS * .32)
+	};
+	const gradientStartY = SECOND_HAND_TIP_Y;
+	const gradientEndY = SECOND_HAND_TAIL_POINT_Y;
+	const gradientSpan = gradientEndY - gradientStartY;
+	const handGradientStops = Array.from({ length: 9 }, (_, index) => {
+		const offset = index / 8;
+		const worldPoint = markerWorldPoint({
+			x: 0,
+			y: gradientStartY + gradientSpan * offset - CY,
+			z: 0
+		}, rotation, 0);
+		const distanceToLight = Math.hypot(effectiveAreaLightPosition.x - worldPoint.x, effectiveAreaLightPosition.y - worldPoint.y, effectiveAreaLightPosition.z - worldPoint.z);
+		const spatialFalloff = Math.min(2.8, Math.max(.35, (LIGHT_HEMISPHERE_RADIUS / distanceToLight) ** 6.5));
+		return {
+			offset,
+			color: shadeMetalFacet({
+				x: 0,
+				y: 0,
+				z: 1
+			}, worldPoint, effectiveAreaLightPosition, lightBrightness * spatialFalloff, DEEP_BLACK_PVD)
+		};
+	});
+	const hubCenter = {
+		x: CX,
+		y: CY,
+		z: 0
+	};
+	const hubToLight = normalize3({
+		x: effectiveAreaLightPosition.x - hubCenter.x,
+		y: effectiveAreaLightPosition.y - hubCenter.y,
+		z: effectiveAreaLightPosition.z - hubCenter.z
+	});
+	const hubHighlightNormal = normalize3({
+		x: hubToLight.x,
+		y: hubToLight.y,
+		z: hubToLight.z + 1
+	});
+	const localHubHighlight = rotateVector(hubHighlightNormal, -rotation);
+	const hubHighlightColor = shadeMetalFacet(hubHighlightNormal, hubCenter, effectiveAreaLightPosition, lightBrightness, DEEP_BLACK_PVD);
+	const hubFaceColor = shadeMetalFacet({
+		x: 0,
+		y: 0,
+		z: 1
+	}, hubCenter, effectiveAreaLightPosition, lightBrightness, DEEP_BLACK_PVD);
+	const hubUnlitColor = shadeMetalFacet({
+		x: 0,
+		y: 0,
+		z: 1
+	}, hubCenter, effectiveAreaLightPosition, 0, DEEP_BLACK_PVD);
+	const hubHighlightX = CX + localHubHighlight.x * SECOND_HAND_HUB_RADIUS * .58;
+	const hubHighlightY = CY + localHubHighlight.y * SECOND_HAND_HUB_RADIUS * .58;
+	const pinHighlightX = CX + localHubHighlight.x * 5.8;
+	const pinHighlightY = CY + localHubHighlight.y * 5.8;
+	const dynamicallyLit = mode === "3d";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
 		"data-seconds-hand": true,
-		transform: `rotate(${rotation} ${CX} ${CY})`,
+		"data-hand-rendering": dynamicallyLit ? "lit-flat" : "flat",
+		transform: animatedOffsetSeconds === void 0 ? `rotate(${rotation} ${CX} ${CY})` : void 0,
+		style: animatedOffsetSeconds === void 0 ? void 0 : {
+			animation: "screensaver-seconds-hand 60s steps(480, end) infinite",
+			animationDelay: `${-animatedOffsetSeconds}s`,
+			transformOrigin: `${CX}px ${CY}px`
+		},
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("defs", { children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("linearGradient", {
 				id: "seconds-tail-gradient",
@@ -1982,6 +2273,60 @@ function SecondsHand({ rotation }) {
 					})
 				]
 			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("radialGradient", {
+				id: "seconds-hub-lit-gradient",
+				gradientUnits: "userSpaceOnUse",
+				cx: hubHighlightX,
+				cy: hubHighlightY,
+				r: SECOND_HAND_HUB_RADIUS * 1.2,
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "0%",
+						stopColor: hubHighlightColor.fill
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "34%",
+						stopColor: hubFaceColor.fill
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "100%",
+						stopColor: hubUnlitColor.fill
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("radialGradient", {
+				id: "seconds-pin-lit-gradient",
+				gradientUnits: "userSpaceOnUse",
+				cx: pinHighlightX,
+				cy: pinHighlightY,
+				r: 13,
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "0%",
+						stopColor: hubHighlightColor.fill
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "38%",
+						stopColor: hubFaceColor.fill
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+						offset: "100%",
+						stopColor: hubUnlitColor.fill
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("linearGradient", {
+				id: "seconds-hand-lit-gradient",
+				gradientUnits: "userSpaceOnUse",
+				x1: CX,
+				y1: gradientStartY,
+				x2: CX,
+				y2: gradientEndY,
+				children: handGradientStops.map((stop) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("stop", {
+					offset: `${stop.offset * 100}%`,
+					stopColor: stop.color.fill
+				}, stop.offset))
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("filter", {
 				id: "seconds-hand-shadow",
 				x: "-30%",
@@ -1993,47 +2338,47 @@ function SecondsHand({ rotation }) {
 					dy: "5",
 					stdDeviation: "4",
 					floodColor: "#000000",
-					floodOpacity: "0.24"
+					floodOpacity: "0.12"
 				})
 			})
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", {
-			filter: "url(#seconds-hand-shadow)",
+			filter: dynamicallyLit ? void 0 : "url(#seconds-hand-shadow)",
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 					d: ptsToPath(counterweight),
-					fill: "url(#seconds-tail-gradient)",
-					stroke: "#555651",
+					fill: dynamicallyLit ? "url(#seconds-hand-lit-gradient)" : "url(#seconds-tail-gradient)",
+					stroke: dynamicallyLit ? handGradientStops[handGradientStops.length - 1].color.stroke : "#555651",
 					strokeWidth: 1.5
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", {
 					d: ptsToPath(upperBlade),
-					fill: "#858681",
-					stroke: "#666762",
+					fill: dynamicallyLit ? "url(#seconds-hand-lit-gradient)" : "#858681",
+					stroke: dynamicallyLit ? handGradientStops[0].color.stroke : "#666762",
 					strokeWidth: 1.728
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", {
 					cx: CX,
 					cy: CY,
 					r: SECOND_HAND_HUB_RADIUS,
-					fill: "url(#seconds-hub-gradient)",
-					stroke: "#565753",
+					fill: dynamicallyLit ? "url(#seconds-hub-lit-gradient)" : "url(#seconds-hub-gradient)",
+					stroke: dynamicallyLit ? hubUnlitColor.stroke : "#565753",
 					strokeWidth: 4
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", {
 					cx: CX,
 					cy: CY,
 					r: 15,
-					fill: "#343532"
+					fill: dynamicallyLit ? "url(#seconds-hub-lit-gradient)" : "#343532"
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", {
 					cx: CX,
 					cy: CY,
 					r: 10,
-					fill: "url(#seconds-pin-gradient)",
-					stroke: "#20211f",
+					fill: dynamicallyLit ? "url(#seconds-pin-lit-gradient)" : "url(#seconds-pin-gradient)",
+					stroke: dynamicallyLit ? hubUnlitColor.stroke : "#20211f",
 					strokeWidth: 2
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", {
+				!dynamicallyLit && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", {
 					cx: CX - 3,
 					cy: CY - 4,
 					r: 3.5,
@@ -2044,7 +2389,7 @@ function SecondsHand({ rotation }) {
 		})]
 	});
 }
-function WeeklyCalendarWatch({ className = "" }) {
+function WeeklyCalendarWatch({ className = "", screensaver = false }) {
 	const [opacityIdx, setOpacityIdx] = (0, import_react.useState)(0);
 	const [referenceIdx, setReferenceIdx] = (0, import_react.useState)(1);
 	const [drawVisible, setDrawVisible] = (0, import_react.useState)(true);
@@ -2065,14 +2410,20 @@ function WeeklyCalendarWatch({ className = "" }) {
 		wallStrength: 1.21,
 		bevelStrength: .63
 	});
-	const [dateRingRotation, setDateRingRotation] = (0, import_react.useState)(DATE_WHEEL_CALIBRATION.dayOneAngleDeg);
-	const [dateWheelDay, setDateWheelDay] = (0, import_react.useState)(DATE_WHEEL_CALIBRATION.initialDay);
-	const [dateRingRadius, setDateRingRadius] = (0, import_react.useState)(DATE_RING_DEFAULT_RADIUS);
-	const [dateRingOffset, setDateRingOffset] = (0, import_react.useState)({
-		x: -3,
-		y: 1
+	const initialClockTimeRef = (0, import_react.useRef)(Date.now());
+	const initialCalendarDate = new Date(initialClockTimeRef.current);
+	const initialDateWheelDay = initialCalendarDate.getDate();
+	const initialIsoWeek = isoWeekCoordinates(initialCalendarDate);
+	const calendarDayAnchorRef = (0, import_react.useRef)({
+		dateWheelMonth: calendarMonthOrdinal(initialCalendarDate),
+		isoWeekYear: initialIsoWeek.year,
+		ordinal: localCalendarDayOrdinal(initialCalendarDate),
+		weekday: initialCalendarDate.getDay()
 	});
-	const [capturedDateRingAngles, setCapturedDateRingAngles] = (0, import_react.useState)([]);
+	const [dateRingRotation, setDateRingRotation] = (0, import_react.useState)(continuousDateWheelAngle(initialCalendarDate, calendarMonthOrdinal(initialCalendarDate), DATE_WHEEL_UNWRAPPED_ANGLES));
+	const [dateWheelDay, setDateWheelDay] = (0, import_react.useState)(initialDateWheelDay);
+	const [dateWheelManualDayOrdinal, setDateWheelManualDayOrdinal] = (0, import_react.useState)(null);
+	const dateWheelSyncedDayOrdinalRef = (0, import_react.useRef)(localCalendarDayOrdinal(initialCalendarDate));
 	const [weekHandVisible, setWeekHandVisible] = (0, import_react.useState)(true);
 	const [dayHandVisible, setDayHandVisible] = (0, import_react.useState)(true);
 	const [hourHandVisible, setHourHandVisible] = (0, import_react.useState)(true);
@@ -2080,38 +2431,87 @@ function WeeklyCalendarWatch({ className = "" }) {
 	const [secondsHandVisible, setSecondsHandVisible] = (0, import_react.useState)(true);
 	const [selectedHand, setSelectedHand] = (0, import_react.useState)("second");
 	const [manualHandAngles, setManualHandAngles] = (0, import_react.useState)({});
-	const [clockTimeMs, setClockTimeMs] = (0, import_react.useState)(null);
+	const manualCalendarHandPeriodRef = (0, import_react.useRef)({});
+	const [clockTimeMs, setClockTimeMs] = (0, import_react.useState)(initialClockTimeRef.current);
+	const [timeScale, setTimeScale] = (0, import_react.useState)(1);
 	const [timeRunning, setTimeRunning] = (0, import_react.useState)(true);
+	const clockAnchorRef = (0, import_react.useRef)({
+		realTimeMs: initialClockTimeRef.current,
+		watchTimeMs: initialClockTimeRef.current
+	});
 	(0, import_react.useEffect)(() => {
 		if (!timeRunning) return;
-		let timerId;
-		const advanceSecondsHand = () => {
-			const now = Date.now();
-			setClockTimeMs(now);
-			const nextTickDelay = SECOND_HAND_TICK_MS - now % SECOND_HAND_TICK_MS;
-			timerId = window.setTimeout(advanceSecondsHand, nextTickDelay);
+		const advanceClock = () => {
+			const realTimeMs = Date.now();
+			const anchor = clockAnchorRef.current;
+			setClockTimeMs(anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale);
 		};
-		advanceSecondsHand();
+		const tickIntervalMs = screensaver ? 1e3 : Math.max(30, SECOND_HAND_TICK_MS / timeScale);
+		let timerId;
+		const tick = () => {
+			advanceClock();
+			const realTimeMs = Date.now();
+			const anchor = clockAnchorRef.current;
+			const phaseAlignedDelay = (SECOND_HAND_TICK_MS - ((anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale) % SECOND_HAND_TICK_MS + SECOND_HAND_TICK_MS) % SECOND_HAND_TICK_MS) / timeScale;
+			timerId = window.setTimeout(tick, tickIntervalMs > 30 ? Math.max(4, phaseAlignedDelay) : tickIntervalMs);
+		};
+		tick();
 		return () => window.clearTimeout(timerId);
-	}, [timeRunning]);
+	}, [
+		screensaver,
+		timeRunning,
+		timeScale
+	]);
+	(0, import_react.useEffect)(() => {
+		if (clockTimeMs === null) return;
+		const currentDate = new Date(clockTimeMs);
+		const dayOrdinal = localCalendarDayOrdinal(currentDate);
+		if (dateWheelManualDayOrdinal === dayOrdinal) return;
+		if (dateWheelManualDayOrdinal === null && dateWheelSyncedDayOrdinalRef.current === dayOrdinal) return;
+		const currentDay = currentDate.getDate();
+		dateWheelSyncedDayOrdinalRef.current = dayOrdinal;
+		setDateWheelManualDayOrdinal(null);
+		setDateWheelDay(currentDay);
+		setDateRingRotation(continuousDateWheelAngle(currentDate, calendarDayAnchorRef.current.dateWheelMonth, DATE_WHEEL_UNWRAPPED_ANGLES));
+	}, [clockTimeMs, dateWheelManualDayOrdinal]);
+	(0, import_react.useEffect)(() => {
+		if (clockTimeMs === null) return;
+		const currentDate = new Date(clockTimeMs);
+		const currentIsoWeek = isoWeekCoordinates(currentDate);
+		const currentPeriods = {
+			day: localCalendarDayOrdinal(currentDate),
+			week: currentIsoWeek.year * 100 + currentIsoWeek.week
+		};
+		const expiredHands = ["day", "week"].filter((hand) => manualCalendarHandPeriodRef.current[hand] !== void 0 && manualCalendarHandPeriodRef.current[hand] !== currentPeriods[hand]);
+		if (expiredHands.length === 0) return;
+		setManualHandAngles((angles) => {
+			const nextAngles = { ...angles };
+			expiredHands.forEach((hand) => {
+				delete nextAngles[hand];
+				delete manualCalendarHandPeriodRef.current[hand];
+			});
+			return nextAngles;
+		});
+	}, [clockTimeMs]);
 	const clockTime = clockTimeMs === null ? null : new Date(clockTimeMs);
 	const secondsWithMilliseconds = clockTime === null ? 0 : clockTime.getSeconds() + clockTime.getMilliseconds() / 1e3;
 	const secondsHandRotation = clockTimeMs === null ? 0 : Math.floor(clockTimeMs % 6e4 / SECOND_HAND_TICK_MS) * SECOND_HAND_DEGREES_PER_TICK;
+	const smoothSecondsHandRotation = clockTimeMs % 6e4 / 6e4 * 360;
+	const displayedLiveSecondsHandRotation = timeScale > 10 ? smoothSecondsHandRotation : secondsHandRotation;
 	const minuteHandAngle = clockTime === null ? MINUTE_HAND_ANGLE_DEG : (clockTime.getMinutes() + secondsWithMilliseconds / 60) * 6;
 	const hourHandAngle = clockTime === null ? HOUR_HAND_ANGLE_DEG : (clockTime.getHours() % 12 + clockTime.getMinutes() / 60 + secondsWithMilliseconds / 3600) * 30;
-	const weekHandAngle = WEEK_OFFSET_DEG + ((clockTime === null ? WEEK_HAND_REFERENCE_WEEK : isoWeekNumber(clockTime)) - 1) * WEEK_STEP_DEG;
-	const currentDay = clockTime === null ? DAY_HAND_REFERENCE_DAY : clockTime.getDay();
+	const weekHandAngle = WEEK_OFFSET_DEG + ((clockTime === null ? WEEK_HAND_REFERENCE_WEEK : continuousIsoWeek(clockTime, calendarDayAnchorRef.current.isoWeekYear, WEEK_COUNT)) - 1) * WEEK_STEP_DEG;
+	const continuousDayIndex = clockTime === null ? DAY_HAND_REFERENCE_DAY : calendarDayAnchorRef.current.weekday + localCalendarDayOrdinal(clockTime) - calendarDayAnchorRef.current.ordinal;
 	const liveHandAngles = {
 		week: weekHandAngle,
-		day: DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + currentDay * DAY_SECTOR_STEP_DEG,
+		day: DAY_SECTOR_OFFSET_DEG - DAY_SECTOR_STEP_DEG / 2 + continuousDayIndex * DAY_SECTOR_STEP_DEG,
 		hour: hourHandAngle,
 		minute: minuteHandAngle,
-		second: secondsHandRotation
+		second: displayedLiveSecondsHandRotation
 	};
 	const effectiveHandAngle = (hand) => manualHandAngles[hand] ?? liveHandAngles[hand];
 	const selectedManualAngle = manualHandAngles[selectedHand];
 	const selectedHandAngle = selectedManualAngle !== void 0 && selectedManualAngle >= 0 && selectedManualAngle <= 360 ? selectedManualAngle : (effectiveHandAngle(selectedHand) % 360 + 360) % 360;
-	const dateRingSliderAngle = (dateRingRotation % 360 + 360) % 360;
 	const weekHandRotation = effectiveHandAngle("week") - WEEK_HAND_ANGLE_DEG;
 	const dayHandRotation = effectiveHandAngle("day") - DAY_HAND_ANGLE_DEG;
 	const hourHandRotation = effectiveHandAngle("hour") - HOUR_HAND_ANGLE_DEG;
@@ -2150,25 +2550,82 @@ function WeeklyCalendarWatch({ className = "" }) {
 		}))
 	];
 	const mDots = minuteDots();
+	const simulatedTimeAt = (realTimeMs) => {
+		const anchor = clockAnchorRef.current;
+		return anchor.watchTimeMs + (realTimeMs - anchor.realTimeMs) * timeScale;
+	};
+	const setTimeMultiplier = (multiplier) => {
+		const realTimeMs = Date.now();
+		const watchTimeMs = timeRunning ? simulatedTimeAt(realTimeMs) : clockTimeMs;
+		const nextScale = timeScale === multiplier ? 1 : multiplier;
+		clockAnchorRef.current = {
+			realTimeMs,
+			watchTimeMs
+		};
+		setClockTimeMs(watchTimeMs);
+		setTimeScale(nextScale);
+	};
+	const resetTimeToNow = () => {
+		const now = Date.now();
+		const currentDate = new Date(now);
+		const currentDay = currentDate.getDate();
+		const currentIsoWeek = isoWeekCoordinates(currentDate);
+		clockAnchorRef.current = {
+			realTimeMs: now,
+			watchTimeMs: now
+		};
+		calendarDayAnchorRef.current = {
+			dateWheelMonth: calendarMonthOrdinal(currentDate),
+			isoWeekYear: currentIsoWeek.year,
+			ordinal: localCalendarDayOrdinal(currentDate),
+			weekday: currentDate.getDay()
+		};
+		setClockTimeMs(now);
+		setManualHandAngles({});
+		manualCalendarHandPeriodRef.current = {};
+		dateWheelSyncedDayOrdinalRef.current = localCalendarDayOrdinal(currentDate);
+		setDateWheelManualDayOrdinal(null);
+		setDateWheelDay(currentDay);
+		setDateRingRotation(continuousDateWheelAngle(currentDate, calendarMonthOrdinal(currentDate), DATE_WHEEL_UNWRAPPED_ANGLES));
+		setTimeRunning(true);
+	};
 	const toggleTimeRunning = () => {
 		if (timeRunning) {
+			const realTimeMs = Date.now();
+			const watchTimeMs = simulatedTimeAt(realTimeMs);
+			clockAnchorRef.current = {
+				realTimeMs,
+				watchTimeMs
+			};
+			setClockTimeMs(watchTimeMs);
 			setTimeRunning(false);
 			return;
 		}
-		setManualHandAngles({});
-		setClockTimeMs(Date.now());
+		clockAnchorRef.current = {
+			realTimeMs: Date.now(),
+			watchTimeMs: clockTimeMs
+		};
 		setTimeRunning(true);
 	};
 	const returnSelectedHandToLive = () => {
+		if (selectedHand === "day" || selectedHand === "week") delete manualCalendarHandPeriodRef.current[selectedHand];
 		setManualHandAngles((angles) => {
 			const nextAngles = { ...angles };
 			delete nextAngles[selectedHand];
 			return nextAngles;
 		});
-		setClockTimeMs(Date.now());
-		setTimeRunning(true);
+		if (!timeRunning) {
+			clockAnchorRef.current = {
+				realTimeMs: Date.now(),
+				watchTimeMs: clockTimeMs
+			};
+			setTimeRunning(true);
+		}
 	};
 	const advanceCalendarHand = (hand, step) => {
+		const currentDate = clockTime ?? /* @__PURE__ */ new Date();
+		const currentIsoWeek = isoWeekCoordinates(currentDate);
+		manualCalendarHandPeriodRef.current[hand] = hand === "day" ? localCalendarDayOrdinal(currentDate) : currentIsoWeek.year * 100 + currentIsoWeek.week;
 		setManualHandAngles((angles) => ({
 			...angles,
 			[hand]: (angles[hand] ?? liveHandAngles[hand]) + step
@@ -2178,6 +2635,7 @@ function WeeklyCalendarWatch({ className = "" }) {
 	const advanceDateWheel = () => {
 		const nextDay = dateWheelDay % DATE_WHEEL_CALIBRATION.dayCount + 1;
 		const measuredTarget = DATE_WHEEL_CALIBRATION.measuredAnglesDeg[nextDay - 1];
+		setDateWheelManualDayOrdinal(localCalendarDayOrdinal(clockTime ?? /* @__PURE__ */ new Date()));
 		setDateRingRotation((angle) => {
 			let unwrappedTarget = Math.floor(angle / 360) * 360 + measuredTarget;
 			if (unwrappedTarget <= angle) unwrappedTarget += 360;
@@ -2185,175 +2643,232 @@ function WeeklyCalendarWatch({ className = "" }) {
 		});
 		setDateWheelDay(nextDay);
 	};
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: `flex flex-col items-center gap-3 ${className}`,
+	const timeTab = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex flex-col gap-3 text-black",
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-				type: "button",
-				"aria-pressed": uiVisible,
-				"aria-label": "Toggle interface controls",
-				title: "Interface controls",
-				onClick: () => setUiVisible((visible) => !visible),
-				className: "fixed left-3 top-3 z-40 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-				children: "⚙️"
-			}),
-			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-						htmlFor: "hand-selector",
-						className: "pl-2 text-sm font-semibold text-black",
-						children: "Hand"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-						id: "hand-selector",
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "mb-1 text-[10px] font-bold",
+					children: "Speed"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "grid grid-cols-3 gap-1",
+					children: [[
+						10,
+						100,
+						1e3,
+						1e4,
+						1e5
+					].map((multiplier) => {
+						const active = timeScale === multiplier;
+						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							"aria-pressed": active,
+							title: active ? "Return to real-time speed" : `Run time at ${multiplier}×`,
+							onClick: () => setTimeMultiplier(multiplier),
+							className: panelButtonClass(active),
+							children: [multiplier.toLocaleString("en-US"), "x"]
+						}, multiplier);
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						title: "Reset the simulated watch to the current local time",
+						onClick: resetTimeToNow,
+						className: panelButtonClass(),
+						children: "Now"
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					"aria-pressed": !timeRunning,
+					onClick: toggleTimeRunning,
+					className: `mt-1 w-full ${panelButtonClass(!timeRunning)}`,
+					children: timeRunning ? "Pause" : "Continue"
+				})
+			] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "mb-1 text-[10px] font-bold",
+					children: "Hand"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center gap-1.5",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+						"aria-label": "Hand",
 						value: selectedHand,
 						onChange: (event) => setSelectedHand(event.target.value),
-						className: "rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black",
+						className: "min-w-0 flex-1 rounded-lg border border-black/25 bg-white px-2 py-1.5 text-xs font-semibold text-black",
 						children: HAND_OPTIONS.map((hand) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 							value: hand.value,
 							children: hand.label
 						}, hand.value))
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
-						className: "min-w-14 text-right text-sm font-semibold tabular-nums text-black",
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
+						className: "min-w-12 text-right text-xs font-semibold tabular-nums",
 						children: [selectedHandAngle.toFixed(1), "°"]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "button",
-						"aria-pressed": !timeRunning,
-						onClick: toggleTimeRunning,
-						className: "rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100",
-						children: timeRunning ? "Pause" : "Continue"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "button",
-						disabled: manualHandAngles[selectedHand] === void 0,
-						onClick: returnSelectedHandToLive,
-						className: "rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-default disabled:opacity-40",
-						children: "Live"
-					})
-				]
-			}),
-			uiVisible && capturedDateRingAngles.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("aside", {
-				className: "fixed right-20 top-3 z-30 w-44 rounded-xl border border-black/20 bg-white/90 p-3 text-black shadow-lg backdrop-blur",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "mb-2 flex items-center justify-between gap-2",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-						className: "text-xs font-semibold",
-						children: "Date angles"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "button",
-						onClick: () => setCapturedDateRingAngles([]),
-						className: "text-[10px] font-semibold text-black/60 hover:text-black",
-						children: "Clear"
 					})]
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ol", {
-					className: "max-h-40 space-y-1 overflow-y-auto text-xs tabular-nums",
-					children: capturedDateRingAngles.map((angle, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
-						className: "flex justify-between gap-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "text-black/50",
-							children: ["#", index + 1]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [angle.toFixed(1), "°"] })]
-					}, `${index}-${angle}`))
-				})]
-			}),
-			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "fixed bottom-3 left-3 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur",
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					disabled: manualHandAngles[selectedHand] === void 0,
+					onClick: returnSelectedHandToLive,
+					className: `mt-1 w-full ${panelButtonClass()} disabled:cursor-default disabled:opacity-40`,
+					children: "Live"
+				})
+			] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mb-1 text-[10px] font-bold",
+				children: "Advance"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid grid-cols-3 gap-1",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "text-xs font-semibold tabular-nums text-black",
-						children: "0°"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => advanceCalendarHand("week", WEEK_STEP_DEG),
+						className: panelButtonClass(),
+						children: "Week +1"
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "range",
-						min: 0,
-						max: 360,
-						step: .1,
-						value: dateRingSliderAngle,
-						"aria-label": "Rotate date ring",
-						onChange: (event) => {
-							const angle = Number(event.target.value);
-							let closestDay = 1;
-							let closestDistance = Number.POSITIVE_INFINITY;
-							DATE_WHEEL_CALIBRATION.measuredAnglesDeg.forEach((measuredAngle, index) => {
-								const distance = Math.abs((angle - measuredAngle + 540) % 360 - 180);
-								if (distance < closestDistance) {
-									closestDistance = distance;
-									closestDay = index + 1;
-								}
-							});
-							setDateRingRotation(angle);
-							setDateWheelDay(closestDay);
-						},
-						className: "min-h-0 w-7 flex-1 cursor-pointer accent-black",
-						style: { writingMode: "vertical-lr" }
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => advanceCalendarHand("day", DAY_SECTOR_STEP_DEG),
+						className: panelButtonClass(),
+						children: "Day +1"
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "text-xs font-semibold tabular-nums text-black",
-						children: "360°"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: advanceDateWheel,
+						className: panelButtonClass(),
+						children: "Date +1"
 					})
 				]
-			}),
-			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "fixed bottom-3 left-16 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur",
+			})] })
+		]
+	});
+	const layersTab = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex flex-col gap-3 text-black",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mb-1 text-[10px] font-bold",
+				children: "Layers"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid grid-cols-2 gap-1",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
-						className: "text-[10px] font-semibold tabular-nums text-black",
-						children: [Math.round(dateRingRadius), "px"]
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length),
+						className: panelButtonClass(),
+						children: PHOTO_LABEL[opacityIdx]
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "range",
-						min: 600,
-						max: 1050,
-						step: "any",
-						value: dateRingRadius,
-						"aria-label": "Resize date ring",
-						onChange: (event) => setDateRingRadius(Number(event.target.value)),
-						className: "min-h-0 w-7 flex-1 cursor-pointer accent-black",
-						style: { writingMode: "vertical-lr" }
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: () => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length),
+						className: panelButtonClass(),
+						children: referenceImage.label
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "text-[10px] font-semibold text-black",
-						children: "Size"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": drawVisible,
+						onClick: () => setDrawVisible((v) => !v),
+						className: panelButtonClass(drawVisible),
+						children: "Drawing"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": textVisible,
+						onClick: () => setTextVisible((visible) => !visible),
+						className: panelButtonClass(textVisible),
+						children: "Text"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": guidesVisible,
+						onClick: () => setGuidesVisible((visible) => !visible),
+						className: panelButtonClass(guidesVisible),
+						children: "Guides"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": handsVisible,
+						onClick: () => setHandsVisible((visible) => !visible),
+						className: panelButtonClass(handsVisible),
+						children: "Hands"
 					})
 				]
-			}),
-			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur",
+			})] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mb-1 text-[10px] font-bold",
+				children: "Hands"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid grid-cols-2 gap-1",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "text-xs font-semibold tabular-nums text-black",
-						children: "0°"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": weekHandVisible,
+						onClick: () => setWeekHandVisible((visible) => !visible),
+						className: panelButtonClass(weekHandVisible),
+						children: "Week"
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-						type: "range",
-						min: 0,
-						max: 360,
-						step: .1,
-						value: selectedHandAngle,
-						"aria-label": `Rotate ${selectedHand} hand`,
-						onChange: (event) => {
-							const angle = Number(event.target.value);
-							setManualHandAngles((angles) => ({
-								...angles,
-								[selectedHand]: angle
-							}));
-						},
-						className: "min-h-0 w-7 flex-1 cursor-pointer accent-black",
-						style: { writingMode: "vertical-lr" }
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": dayHandVisible,
+						onClick: () => setDayHandVisible((visible) => !visible),
+						className: panelButtonClass(dayHandVisible),
+						children: "Day"
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-						className: "text-xs font-semibold tabular-nums text-black",
-						children: "360°"
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": hourHandVisible,
+						onClick: () => setHourHandVisible((visible) => !visible),
+						className: panelButtonClass(hourHandVisible),
+						children: "Hour"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": minuteHandVisible,
+						onClick: () => setMinuteHandVisible((visible) => !visible),
+						className: panelButtonClass(minuteHandVisible),
+						children: "Minute"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": secondsHandVisible,
+						onClick: () => setSecondsHandVisible((visible) => !visible),
+						className: panelButtonClass(secondsHandVisible),
+						children: "Second"
 					})
 				]
+			})] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mb-1 text-[10px] font-bold",
+				children: "Markers"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				"aria-pressed": markerMode === "3d",
+				onClick: () => setMarkerMode((mode) => mode === "flat" ? "3d" : "flat"),
+				className: `w-full ${panelButtonClass()}`,
+				children: markerMode === "3d" ? "Markers: 3D" : "Markers: Flat"
+			})] })
+		]
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: `flex flex-col items-center gap-3 ${className}`,
+		children: [
+			!screensaver && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "fixed left-3 top-3 z-40 flex items-center gap-1.5",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					"aria-pressed": uiVisible,
+					"aria-label": "Toggle interface controls",
+					title: "Interface controls",
+					onClick: () => setUiVisible((visible) => !visible),
+					className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
+					children: "⚙️"
+				})
 			}),
-			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HemisphereLightControl, {
+			uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ControlPanel, {
 				brightness: markerLightBrightness,
 				dateWindowLight: dateWindowLightSettings,
+				layersTab,
 				position: lightDiskPosition,
+				timeTab,
 				onBrightnessChange: setMarkerLightBrightness,
 				onChange: setLightDiskPosition,
 				onDateWindowLightChange: setDateWindowLightSettings
@@ -2371,16 +2886,16 @@ function WeeklyCalendarWatch({ className = "" }) {
               round 1px
             )` },
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
-							src: "/date-ring-overlay.png",
+							src: publicAsset("date-ring-overlay.png"),
 							alt: "",
 							"aria-hidden": true,
 							draggable: false,
 							className: "absolute select-none transition-transform duration-[180ms] ease-[cubic-bezier(0.2,0.85,0.25,1)]",
 							style: {
-								left: `calc(${(CX - dateRingRadius) / IMG_W * 100}% + ${dateRingOffset.x}px)`,
-								top: `calc(${(CY - dateRingRadius) / IMG_H * 100}% + ${dateRingOffset.y}px)`,
-								width: `${dateRingRadius * 2 / IMG_W * 100}%`,
-								height: `${dateRingRadius * 2 / IMG_H * 100}%`,
+								left: `calc(${(CX - DATE_RING_DEFAULT_RADIUS) / IMG_W * 100}% + ${DATE_RING_OFFSET_X}px)`,
+								top: `calc(${(CY - DATE_RING_DEFAULT_RADIUS) / IMG_H * 100}% + ${DATE_RING_OFFSET_Y}px)`,
+								width: `${DATE_RING_DEFAULT_RADIUS * 2 / IMG_W * 100}%`,
+								height: `${DATE_RING_DEFAULT_RADIUS * 2 / IMG_H * 100}%`,
 								opacity: DATE_RING_OPACITY,
 								transform: `rotate(${dateRingRotation}deg)`
 							}
@@ -2588,7 +3103,7 @@ function WeeklyCalendarWatch({ className = "" }) {
 						]
 					}),
 					referenceIdx === 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
-						src: "/date-window-shadow.png?v=2",
+						src: `${publicAsset("date-window-shadow.png")}?v=2`,
 						alt: "",
 						"aria-hidden": true,
 						draggable: false,
@@ -2621,8 +3136,18 @@ function WeeklyCalendarWatch({ className = "" }) {
 							className: "transition-opacity duration-200",
 							style: { opacity: handsVisible ? 1 : 0 },
 							children: [
-								dayHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DayIndicatorHand, { rotation: dayHandRotation }),
-								weekHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeekIndicatorHand, { rotation: weekHandRotation }),
+								dayHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DayIndicatorHand, {
+									lightBrightness: markerLightBrightness,
+									lightPosition: markerLightPosition,
+									mode: markerMode,
+									rotation: dayHandRotation
+								}),
+								weekHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeekIndicatorHand, {
+									lightBrightness: markerLightBrightness,
+									lightPosition: markerLightPosition,
+									mode: markerMode,
+									rotation: weekHandRotation
+								}),
 								hourHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HourHand, {
 									lightBrightness: markerLightBrightness,
 									lightPosition: markerLightPosition,
@@ -2635,7 +3160,13 @@ function WeeklyCalendarWatch({ className = "" }) {
 									mode: markerMode,
 									rotation: minuteHandRotation
 								}),
-								secondsHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SecondsHand, { rotation: displayedSecondsHandRotation })
+								secondsHandVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SecondsHand, {
+									animatedOffsetSeconds: screensaver ? initialClockTimeRef.current % 6e4 / 1e3 : void 0,
+									lightBrightness: markerLightBrightness,
+									lightPosition: markerLightPosition,
+									mode: markerMode,
+									rotation: displayedSecondsHandRotation
+								})
 							]
 						})
 					}),
@@ -2679,189 +3210,17 @@ function WeeklyCalendarWatch({ className = "" }) {
 						})] }, marker.key))]
 					})
 				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col items-center gap-2",
-				children: [
-					uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center justify-center gap-1.5",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: PHOTO_LABEL[opacityIdx]
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: referenceImage.label
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setDrawVisible((v) => !v),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: drawVisible ? "Drawing: ON" : "Drawing: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setTextVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: textVisible ? "Text: ON" : "Text: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setGuidesVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: guidesVisible ? "Guides: ON" : "Guides: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": handsVisible,
-								onClick: () => setHandsVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: handsVisible ? "Hands: ON" : "Hands: OFF"
-							})
-						]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center justify-center gap-2",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": weekHandVisible,
-								onClick: () => setWeekHandVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: weekHandVisible ? "Week: ON" : "Week: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": dayHandVisible,
-								onClick: () => setDayHandVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: dayHandVisible ? "Day: ON" : "Day: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": hourHandVisible,
-								onClick: () => setHourHandVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: hourHandVisible ? "Hour: ON" : "Hour: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": minuteHandVisible,
-								onClick: () => setMinuteHandVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: minuteHandVisible ? "Minute: ON" : "Minute: OFF"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-pressed": secondsHandVisible,
-								onClick: () => setSecondsHandVisible((visible) => !visible),
-								className: "shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: secondsHandVisible ? "Second: ON" : "Second: OFF"
-							})
-						]
-					})] }),
-					uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-center gap-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							"aria-pressed": markerMode === "3d",
-							onClick: () => setMarkerMode((mode) => mode === "flat" ? "3d" : "flat"),
-							className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-							children: markerMode === "3d" ? "Markers: 3D" : "Markers: Flat"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => advanceCalendarHand("week", WEEK_STEP_DEG),
-								className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: "Week +1"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => advanceCalendarHand("day", DAY_SECTOR_STEP_DEG),
-								className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: "Day +1"
-							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: advanceDateWheel,
-								className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: "Date +1"
-							})
-						] })]
-					}),
-					uiVisible && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex items-center justify-center gap-2",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
-								className: "rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold tabular-nums text-black shadow-lg",
-								"aria-label": `Date ring center offset X ${dateRingOffset.x} pixels, Y ${dateRingOffset.y} pixels`,
-								children: [
-									"X ",
-									dateRingOffset.x >= 0 ? "+" : "",
-									dateRingOffset.x,
-									"px · Y ",
-									dateRingOffset.y >= 0 ? "+" : "",
-									dateRingOffset.y,
-									"px"
-								]
-							}),
-							[
-								{
-									label: "X−",
-									axis: "x",
-									delta: -1,
-									description: "Move date ring left 1 pixel"
-								},
-								{
-									label: "X+",
-									axis: "x",
-									delta: 1,
-									description: "Move date ring right 1 pixel"
-								},
-								{
-									label: "Y−",
-									axis: "y",
-									delta: -1,
-									description: "Move date ring up 1 pixel"
-								},
-								{
-									label: "Y+",
-									axis: "y",
-									delta: 1,
-									description: "Move date ring down 1 pixel"
-								}
-							].map(({ label, axis, delta, description }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								"aria-label": description,
-								title: description,
-								onClick: () => setDateRingOffset((offset) => ({
-									...offset,
-									[axis]: offset[axis] + delta
-								})),
-								className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: label
-							}, label)),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								onClick: () => setCapturedDateRingAngles((angles) => [...angles, Math.round(dateRingRotation * 10) / 10]),
-								className: "rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-								children: "Capture angle"
-							})
-						]
-					})
-				]
 			})
 		]
 	});
 }
-function WatchStage() {
+function WatchStage({ screensaver = false }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "flex min-h-dvh flex-col items-center justify-center bg-[#f1e9e0] p-3 sm:p-4",
-		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeeklyCalendarWatch, { className: "h-auto w-full max-w-[min(96vw,720px)]" })
+		className: `flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#f1e9e0] ${screensaver ? "p-0" : "p-3 sm:p-4"}`,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeeklyCalendarWatch, {
+			screensaver,
+			className: screensaver ? "h-auto w-[min(94vw,94vh)] max-w-none" : "h-auto w-full max-w-[min(96vw,720px)]"
+		})
 	});
 }
 function Home() {

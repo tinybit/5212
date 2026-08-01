@@ -45,7 +45,7 @@ Day:    25    26    27    28    29    30    31
 Angle:  4.9  16.6  28.0  39.7  51.4  62.9  74.5
 ```
 
-The wheel initializes directly at the current local calendar date and its measured angle before the first render, avoiding a startup transition from day 1. Its live angle is derived from the simulated local timestamp and a continuous month index, so 31→1 remains a single forward step while 30→1 and February→March skip dates that do not exist. This makes the simulator perpetual across variable month lengths and leap years. Moving the rotation slider or pressing **Date +1** creates a temporary manual override that automatically returns to the exact live date at the next simulated local date boundary. **Date +1** targets the complete per-date lookup table instead of applying a uniform increment. Targets remain unwrapped across 360° so the transition from day 24 (`353.5°`) to day 25 (`4.9°`) continues clockwise.
+The wheel initializes directly at the current local calendar date and its measured angle before the first render, avoiding a startup transition from day 1. Its live angle is derived from the simulated local timestamp and a continuous month index, so 31→1 remains a single forward step while 30→1 and February→March skip dates that do not exist. This makes the simulator perpetual across variable month lengths and leap years. Pressing **Date +1** creates a temporary manual override that automatically returns to the exact live date at the next simulated local date boundary. **Date +1** targets the complete per-date lookup table instead of applying a uniform increment. Targets remain unwrapped across 360° so the transition from day 24 (`353.5°`) to day 25 (`4.9°`) continues clockwise.
 
 ### Why the photo is imperfect
 
@@ -228,38 +228,37 @@ function hourAngleDeg(h: number) {
 
 ## 8. UI controls
 
-Controls live in four rows under the dial.
+All controls live in one draggable **Controls** window (`ControlPanel`), shown or hidden by the persistent top-left **⚙️** button; the window is hidden by default. It drags by its header with pointer or arrow keys, with no viewport clamp, so it may travel past the screen edges (toggling **⚙️** off and on restores the default position). Controls are grouped into three tabs.
 
-Row 1:
+**Time** tab:
+
+- **10x / 100x / 1,000x / 10,000x / 100,000x** accelerate the simulated timeline, with a second press on the active multiplier restoring 1x speed.
+- **Now** resets the simulated instant, date wheel, and manual hand overrides to current local time without changing the selected multiplier.
+- **Pause** freezes the simulated timeline and **Continue** resumes from the frozen instant without clearing manual overrides or snapping back to the system clock.
+- The hand selector shows the selected hand's current angle, and **Live** clears the selected hand override.
+- **Week +1**, **Day +1**, and **Date +1** advance their hand by one sector and select it for inspection. These temporary overrides automatically expire at the next relevant simulated day or ISO-week boundary. Week, weekday, and date advances share the same short 180ms mechanical snap. **Date +1** targets the next measured per-date angle. Calendar hands and the date wheel retain unwrapped angles so crossing 360° continues clockwise.
+
+The eight-step seconds-hand animation remains enabled through 10x; at faster multipliers it uses the continuous fractional simulated-second angle instead, eliminating mechanical beat pauses while all clock and calendar state continues advancing. The clock anchors itself to local time when the page opens, then advances from that simulated instant using the selected multiplier.
+
+**Layers** tab:
 
 - **Photo** — cycles `1 → 0.5 → 0` (`Photo: 100% / 50% / OFF`).
 - **Reference** — switches between the complete watch image and the aligned dial-only image.
 - **Drawing** — shows or hides dial lines, markers, batons, and center diagnostics.
 - **Text** — independently shows or hides generated week, month, and weekday glyphs.
 - **Guides** — shows or hides all glyph-center circles and radial alignment rays.
-- **Hands** — shows or hides the complete programmatic hand stack.
+- **Hands** — shows or hides the complete programmatic hand stack, with independent **Week**, **Day**, **Hour**, **Minute**, and **Second** toggles.
+- **Markers: Flat / 3D** — mutually exclusive marker mode: Flat preserves the original calibration facets and original hour/minute hand artwork, while 3D shows opaque physically lit marker and hand prisms.
 
 Photo, drawing, text, guides, and hands are independent layers. Toggling any one must not mutate or override the state of another.
 
 Default state: Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, and Hands ON.
 
-Row 2 contains independent `ON/OFF` controls for:
+**Light** tab: the hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. In 3D marker mode, position and brightness update all marker, hour-hand, and minute-hand facet colors immediately. The date-window sliders control aperture-shadow softness, depth, cast strength, wall shading, and the photographic bevel opacity.
 
-- **Week**
-- **Day**
-- **Hour**
-- **Minute**
-- **Second**
+The date-ring calibration controls (X/Y offset nudges, **Capture angle**, and the rotation/size sliders) were removed after calibration finished. The calibrated values are locked as constants in the component: radius `826.868626px`, `X −3px`, and `Y +1px`.
 
-Row 3 contains **Markers: Flat / 3D**, **Week +1**, **Day +1**, and **Date +1**. Marker mode is mutually exclusive: Flat preserves the original calibration facets and original hour/minute hand artwork, while 3D shows opaque physically lit marker and hand prisms. The persistent top-left **⚙️** button shows or hides every other interface control; controls are hidden by default. Persistent **10x**, **100x**, **1,000x**, **10,000x**, and **100,000x** buttons beside it accelerate the simulated timeline, with a second press on the active multiplier restoring 1x speed. **Now** resets the simulated instant, date wheel, and manual hand overrides to current local time without changing the selected multiplier. The eight-step seconds-hand animation remains enabled through 10x; at faster multipliers it uses the continuous fractional simulated-second angle instead, eliminating mechanical beat pauses while all clock and calendar state continues advancing. The calendar-hand controls advance their hand by one sector and select it for inspection. These temporary overrides automatically expire at the next relevant simulated day or ISO-week boundary, while **Live** can return the selected hand immediately. Week, weekday, and date advances share the same short 180ms mechanical snap. **Date +1** targets the next measured per-date angle. Calendar hands and the date wheel retain unwrapped angles so crossing 360° continues clockwise.
-
-Row 4 contains a live `X/Y` offset readout plus **X−**, **X+**, **Y−**, **Y+**, and **Capture angle**. Each offset click moves the rotating date-ring layer by one rendered pixel in the named direction. **Capture angle** appends the current normalized wheel rotation, rounded to 0.1°, to a numbered on-screen list with a **Clear** action. The calibrated defaults are radius `826.868626px`, `X −3px`, and `Y +1px`.
-
-All controls are client state inside `WeeklyCalendarWatch`.
-
-A fixed hand selector and right-side vertical `0–360°` slider can manually override any hand angle. Two left-side vertical sliders rotate the transparent date-ring overlay through `0–360°` and resize its radius from `600–1050px`; the size control shows its current radius. **Live** clears the selected hand override. The clock anchors itself to local time when the page opens, then advances from that simulated instant using the selected multiplier. **Pause** freezes that timeline and **Continue** resumes from the frozen instant without clearing manual overrides or snapping back to the system clock.
-
-In 3D marker mode, the left-side light panel can be dragged by its header. Its hemisphere disk supports pointer dragging and keyboard arrows, while a `0–200%` slider controls point-light brightness without removing the low ambient term. Position and brightness update all marker, hour-hand, and minute-hand facet colors immediately.
+All controls are client state inside `WeeklyCalendarWatch`; the active tab is local state inside `ControlPanel`.
 
 ---
 
@@ -442,9 +441,10 @@ src/components/WeeklyCalendarWatch.tsx
 ├── hourAngleDeg
 ├── monthSectorLines / daySectorLines / weekSectorLines / weekDots / minuteDots
 ├── HourBaton component (4-facet polygon paths + rotate/translate)
+├── ControlPanel (draggable tabbed control window: Time / Layers / Light)
 ├── DayIndicatorHand / WeekIndicatorHand
 ├── HourHand / MinuteHand / SecondsHand
-└── WeeklyCalendarWatch (clock state, photo, SVG layers, guides, and controls)
+└── WeeklyCalendarWatch (clock state, photo, SVG layers, guides, and tab content)
 ```
 
 Everything geometric lives in one file so the constants stay co-located with the drawing code. Do not scatter the radii into a separate config until the dial is finished.

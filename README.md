@@ -71,18 +71,19 @@ See [Building and installing the macOS screensaver](docs/SCREENSAVER.md) for pre
 
 ## Controls
 
-The dial controls are arranged in four rows:
+All controls live in a single draggable **Controls** window, shown or hidden by the persistent `⚙️` button. The window drags by its header — including past the screen edges — and groups its controls into three tabs:
 
-1. `Photo`, `Reference`, `Drawing`, `Text`, `Guides`, `Hands`
-2. `Week`, `Day`, `Hour`, `Minute`, `Second`
-3. `Markers: Flat / 3D`, `Week +1`, `Day +1`, `Date +1`
-4. `X−`, `X+`, `Y−`, `Y+` date-ring center offsets and `Capture angle`
+1. **Time** — timeline speed, pause/continue, hand inspection, and calendar advances.
+2. **Layers** — display layers, individual hand visibility, and the marker rendering mode.
+3. **Light** — the hemisphere light position, brightness, and date-window shading.
 
-`Photo` cycles through 100%, 50%, and OFF. `Reference` switches between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs. The second row controls individual hands within the hand layer. The third row switches between the original flat calibration markers and advances the week, weekday, and date displays. The fourth row moves the rotating date-ring center by one rendered pixel per click and records the current wheel angle in an on-screen list.
+The **Time** tab accelerates the simulated watch timeline from the local time captured when the page opens with `10x`–`100,000x` multipliers; pressing the active multiplier again returns to real-time speed. `Now` resets the simulated instant and all manual hand/date overrides to the current local time while preserving the selected speed. The mechanical eight-step seconds animation remains active through 10x, then switches to continuous simulated rotation above 10x so high-speed playback has no artificial beat pauses. The hand selector shows any hand's current angle, `Pause`/`Continue` freeze and resume the simulated timeline, and `Live` returns a manually positioned hand to its live clock/calendar angle. `Week +1`, `Day +1`, and `Date +1` advance their displays by one step; manual date and weekday positioning returns to live synchronization at the next simulated local date boundary, and manual week positioning returns at the next ISO-week boundary. Speed changes and pause/continue preserve the current simulated instant instead of snapping back to the computer clock.
 
-The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and interface controls hidden. The persistent `⚙️` button shows or hides all controls. Adjacent `10x`, `100x`, `1,000x`, `10,000x`, and `100,000x` buttons accelerate the simulated watch timeline from the local time captured when the page opens; pressing the active multiplier again returns to real-time speed. `Now` resets the simulated instant and all manual hand/date overrides to the current local time while preserving the selected speed. The mechanical eight-step seconds animation remains active through 10x, then switches to continuous simulated rotation above 10x so high-speed playback has no artificial beat pauses.
+The **Layers** tab cycles `Photo` through 100%, 50%, and OFF, and `Reference` between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs, and `Guides` shows the glyph-center calibration overlay. `Hands` toggles the complete hand stack, with individual `Week`, `Day`, `Hour`, `Minute`, and `Second` toggles beneath it. `Markers: Flat / 3D` switches between the original flat calibration markers and physically lit prisms; it also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. The date ring renders at its calibrated radius and center offset, which are fixed constants in the component.
 
-The fixed controls above and beside the dial select any hand, rotate it through 360°, rotate and resize the date-ring overlay, pause or continue the current simulated timeline, and return a manually positioned hand to its live clock/calendar angle. Manual date and weekday positioning returns to live synchronization at the next simulated local date boundary; manual week positioning returns at the next ISO-week boundary. Speed changes and pause/continue preserve the current simulated instant instead of snapping back to the computer clock. The marker mode also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. In 3D mode, the movable light panel positions a broad source on a hemisphere and controls its brightness; changes update polished black-metal reflections independently on every marker and hand, with a restrained deep-black PVD response on the flat seconds hand.
+The **Light** tab positions a broad source on a hemisphere and controls its brightness; in 3D marker mode, changes update polished black-metal reflections independently on every marker and hand, with a restrained deep-black PVD response on the flat seconds hand.
+
+The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and the controls window hidden.
 
 ## Key files
 

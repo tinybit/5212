@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   calendarMonthOrdinal,
@@ -49,6 +49,9 @@ const R_WEEK_OUT = 928;
 const R_DIAL_EDGE = 1030;
 const DATE_RING_DEFAULT_RADIUS = 826.868626390606;
 const DATE_RING_OPACITY = 1;
+/** Calibrated date-ring center offset in rendered pixels. */
+const DATE_RING_OFFSET_X = -3;
+const DATE_RING_OFFSET_Y = 1;
 const DATE_WHEEL_CALIBRATION = {
   dayCount: 31,
   initialDay: 1,
@@ -1172,25 +1175,46 @@ function DateWindowLighting({
   );
 }
 
-function HemisphereLightControl({
+type ControlTabId = "time" | "layers" | "light";
+
+const CONTROL_TABS: { id: ControlTabId; label: string }[] = [
+  { id: "time", label: "Time" },
+  { id: "layers", label: "Layers" },
+  { id: "light", label: "Light" },
+];
+
+/** Shared styling for buttons inside the control window. */
+function panelButtonClass(active = false) {
+  return `rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${
+    active
+      ? "border-black bg-black text-white hover:bg-zinc-800"
+      : "border-black/25 bg-white text-black hover:bg-zinc-100"
+  }`;
+}
+
+function ControlPanel({
   brightness,
   dateWindowLight,
+  layersTab,
   position,
+  timeTab,
   onBrightnessChange,
   onChange,
   onDateWindowLightChange,
 }: {
   brightness: number;
   dateWindowLight: DateWindowLightSettings;
+  layersTab: ReactNode;
   position: LightDiskPosition;
+  timeTab: ReactNode;
   onBrightnessChange: (brightness: number) => void;
   onChange: (position: LightDiskPosition) => void;
   onDateWindowLightChange: (settings: DateWindowLightSettings) => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const diskRef = useRef<HTMLDivElement>(null);
   const panelDragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+  const [activeTab, setActiveTab] = useState<ControlTabId>("time");
   const radius = Math.hypot(position.u, position.v);
   const elevation = (Math.asin(Math.sqrt(Math.max(0, 1 - radius * radius))) * 180) / Math.PI;
   const azimuth = (Math.atan2(position.u, -position.v) * 180) / Math.PI;
@@ -1263,28 +1287,25 @@ function HemisphereLightControl({
 
   const movePanel = (clientX: number, clientY: number) => {
     const drag = panelDragRef.current;
-    const bounds = panelRef.current?.getBoundingClientRect();
-    if (!drag || !bounds) return;
-    const requestedX = clientX - drag.x;
-    const requestedY = clientY - drag.y;
-    const deltaX = Math.min(window.innerWidth - bounds.right, Math.max(-bounds.left, requestedX));
-    const deltaY = Math.min(window.innerHeight - bounds.bottom, Math.max(-bounds.top, requestedY));
-    setPanelOffset((offset) => ({ x: offset.x + deltaX, y: offset.y + deltaY }));
+    if (!drag) return;
+    setPanelOffset((offset) => ({
+      x: offset.x + (clientX - drag.x),
+      y: offset.y + (clientY - drag.y),
+    }));
     panelDragRef.current = { ...drag, x: clientX, y: clientY };
   };
 
   return (
     <div
-      ref={panelRef}
-      className="fixed left-32 top-1/2 z-[100] w-48 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
+      className="fixed left-6 top-16 z-[100] w-64 rounded-xl border border-black/20 bg-white/90 p-3 shadow-lg backdrop-blur"
       style={{
-        transform: `translate(${panelOffset.x}px, calc(-50% + ${panelOffset.y}px))`,
+        transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)`,
       }}
     >
       <div
         role="button"
         tabIndex={0}
-        aria-label="Drag marker light panel"
+        aria-label="Drag control window"
         className="mb-2 touch-none select-none text-center text-xs font-semibold text-black cursor-move"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -1320,93 +1341,122 @@ function HemisphereLightControl({
           setPanelOffset((offset) => ({ x: offset.x + delta[0], y: offset.y + delta[1] }));
         }}
       >
-        Marker light
+        Controls
       </div>
       <div
-        ref={diskRef}
-        role="slider"
-        tabIndex={0}
-        aria-label="Hour marker light position"
-        aria-valuemin={0}
-        aria-valuemax={90}
-        aria-valuenow={Math.round(elevation)}
-        aria-valuetext={`${Math.round(azimuth)} degrees azimuth, ${Math.round(elevation)} degrees elevation`}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          updateFromPointer(event.clientX, event.clientY);
-        }}
-        onPointerMove={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            updateFromPointer(event.clientX, event.clientY);
-          }
-        }}
-        onKeyDown={(event) => {
-          const step = event.shiftKey ? 0.02 : 0.06;
-          const movement: Record<string, [number, number]> = {
-            ArrowLeft: [-step, 0],
-            ArrowRight: [step, 0],
-            ArrowUp: [0, -step],
-            ArrowDown: [0, step],
-          };
-          const delta = movement[event.key];
-          if (!delta) return;
-          event.preventDefault();
-          onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
-        }}
-        className="relative mx-auto h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black"
+        role="tablist"
+        aria-label="Control groups"
+        className="mb-3 grid grid-cols-3 gap-1 rounded-lg bg-black/10 p-1"
       >
-        <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" />
-        <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" />
-        <div
-          className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md"
-          style={{ left: `${(position.u + 1) * 50}%`, top: `${(position.v + 1) * 50}%` }}
-        />
+        {CONTROL_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+              activeTab === tab.id ? "bg-black text-white" : "text-black hover:bg-black/10"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-      <div className="mt-2 text-center text-[10px] tabular-nums text-black">
-        {Math.round(azimuth)}° / {Math.round(elevation)}°
-      </div>
-      <label className="mt-2 block text-[10px] font-semibold text-black">
-        <span className="flex items-center justify-between gap-2">
-          <span>Brightness</span>
-          <output className="tabular-nums">{Math.round(brightness * 100)}%</output>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={200}
-          step={1}
-          value={brightness * 100}
-          onChange={(event) => onBrightnessChange(Number(event.target.value) / 100)}
-          className="mt-1 w-full cursor-pointer accent-black"
-          aria-label="Marker light brightness"
-        />
-      </label>
-      <div className="mt-3 border-t border-black/15 pt-2">
-        <div className="mb-1 text-[10px] font-bold text-black">Date window</div>
-        {dateWindowControls.map((control) => (
-          <label key={control.key} className="mt-1.5 block text-[10px] font-semibold text-black">
+      {activeTab === "time" && <div role="tabpanel">{timeTab}</div>}
+      {activeTab === "layers" && <div role="tabpanel">{layersTab}</div>}
+      {activeTab === "light" && (
+        <div role="tabpanel">
+          <div
+            ref={diskRef}
+            role="slider"
+            tabIndex={0}
+            aria-label="Hour marker light position"
+            aria-valuemin={0}
+            aria-valuemax={90}
+            aria-valuenow={Math.round(elevation)}
+            aria-valuetext={`${Math.round(azimuth)} degrees azimuth, ${Math.round(elevation)} degrees elevation`}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              updateFromPointer(event.clientX, event.clientY);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                updateFromPointer(event.clientX, event.clientY);
+              }
+            }}
+            onKeyDown={(event) => {
+              const step = event.shiftKey ? 0.02 : 0.06;
+              const movement: Record<string, [number, number]> = {
+                ArrowLeft: [-step, 0],
+                ArrowRight: [step, 0],
+                ArrowUp: [0, -step],
+                ArrowDown: [0, step],
+              };
+              const delta = movement[event.key];
+              if (!delta) return;
+              event.preventDefault();
+              onChange(clampPosition(position.u + delta[0], position.v + delta[1]));
+            }}
+            className="relative mx-auto h-32 w-32 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black"
+          >
+            <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" />
+            <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" />
+            <div
+              className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md"
+              style={{ left: `${(position.u + 1) * 50}%`, top: `${(position.v + 1) * 50}%` }}
+            />
+          </div>
+          <div className="mt-2 text-center text-[10px] tabular-nums text-black">
+            {Math.round(azimuth)}° / {Math.round(elevation)}°
+          </div>
+          <label className="mt-2 block text-[10px] font-semibold text-black">
             <span className="flex items-center justify-between gap-2">
-              <span>{control.label}</span>
-              <output className="tabular-nums">{control.valueText}</output>
+              <span>Brightness</span>
+              <output className="tabular-nums">{Math.round(brightness * 100)}%</output>
             </span>
             <input
               type="range"
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              value={dateWindowLight[control.key]}
-              onChange={(event) =>
-                onDateWindowLightChange({
-                  ...dateWindowLight,
-                  [control.key]: Number(event.target.value),
-                })
-              }
-              className="mt-0.5 w-full cursor-pointer accent-black"
-              aria-label={`Date window ${control.label.toLowerCase()}`}
+              min={0}
+              max={200}
+              step={1}
+              value={brightness * 100}
+              onChange={(event) => onBrightnessChange(Number(event.target.value) / 100)}
+              className="mt-1 w-full cursor-pointer accent-black"
+              aria-label="Marker light brightness"
             />
           </label>
-        ))}
-      </div>
+          <div className="mt-3 border-t border-black/15 pt-2">
+            <div className="mb-1 text-[10px] font-bold text-black">Date window</div>
+            {dateWindowControls.map((control) => (
+              <label
+                key={control.key}
+                className="mt-1.5 block text-[10px] font-semibold text-black"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span>{control.label}</span>
+                  <output className="tabular-nums">{control.valueText}</output>
+                </span>
+                <input
+                  type="range"
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={dateWindowLight[control.key]}
+                  onChange={(event) =>
+                    onDateWindowLightChange({
+                      ...dateWindowLight,
+                      [control.key]: Number(event.target.value),
+                    })
+                  }
+                  className="mt-0.5 w-full cursor-pointer accent-black"
+                  aria-label={`Date window ${control.label.toLowerCase()}`}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2208,9 +2258,6 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
   const [dateWheelDay, setDateWheelDay] = useState<number>(initialDateWheelDay);
   const [dateWheelManualDayOrdinal, setDateWheelManualDayOrdinal] = useState<number | null>(null);
   const dateWheelSyncedDayOrdinalRef = useRef(localCalendarDayOrdinal(initialCalendarDate));
-  const [dateRingRadius, setDateRingRadius] = useState(DATE_RING_DEFAULT_RADIUS);
-  const [dateRingOffset, setDateRingOffset] = useState({ x: -3, y: 1 });
-  const [capturedDateRingAngles, setCapturedDateRingAngles] = useState<number[]>([]);
   const [weekHandVisible, setWeekHandVisible] = useState(true);
   const [dayHandVisible, setDayHandVisible] = useState(true);
   const [hourHandVisible, setHourHandVisible] = useState(true);
@@ -2351,7 +2398,6 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
     selectedManualAngle !== undefined && selectedManualAngle >= 0 && selectedManualAngle <= 360
       ? selectedManualAngle
       : ((effectiveHandAngle(selectedHand) % 360) + 360) % 360;
-  const dateRingSliderAngle = ((dateRingRotation % 360) + 360) % 360;
   const weekHandRotation = effectiveHandAngle("week") - WEEK_HAND_ANGLE_DEG;
   const dayHandRotation = effectiveHandAngle("day") - DAY_HAND_ANGLE_DEG;
   const hourHandRotation = effectiveHandAngle("hour") - HOUR_HAND_ANGLE_DEG;
@@ -2498,6 +2544,209 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
     setDateWheelDay(nextDay);
   };
 
+  const timeTab = (
+    <div className="flex flex-col gap-3 text-black">
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Speed</div>
+        <div className="grid grid-cols-3 gap-1">
+          {[10, 100, 1000, 10_000, 100_000].map((multiplier) => {
+            const active = timeScale === multiplier;
+            return (
+              <button
+                key={multiplier}
+                type="button"
+                aria-pressed={active}
+                title={active ? "Return to real-time speed" : `Run time at ${multiplier}×`}
+                onClick={() => setTimeMultiplier(multiplier)}
+                className={panelButtonClass(active)}
+              >
+                {multiplier.toLocaleString("en-US")}x
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            title="Reset the simulated watch to the current local time"
+            onClick={resetTimeToNow}
+            className={panelButtonClass()}
+          >
+            Now
+          </button>
+        </div>
+        <button
+          type="button"
+          aria-pressed={!timeRunning}
+          onClick={toggleTimeRunning}
+          className={`mt-1 w-full ${panelButtonClass(!timeRunning)}`}
+        >
+          {timeRunning ? "Pause" : "Continue"}
+        </button>
+      </section>
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Hand</div>
+        <div className="flex items-center gap-1.5">
+          <select
+            aria-label="Hand"
+            value={selectedHand}
+            onChange={(event) => setSelectedHand(event.target.value as HandKey)}
+            className="min-w-0 flex-1 rounded-lg border border-black/25 bg-white px-2 py-1.5 text-xs font-semibold text-black"
+          >
+            {HAND_OPTIONS.map((hand) => (
+              <option key={hand.value} value={hand.value}>
+                {hand.label}
+              </option>
+            ))}
+          </select>
+          <output className="min-w-12 text-right text-xs font-semibold tabular-nums">
+            {selectedHandAngle.toFixed(1)}°
+          </output>
+        </div>
+        <button
+          type="button"
+          disabled={manualHandAngles[selectedHand] === undefined}
+          onClick={returnSelectedHandToLive}
+          className={`mt-1 w-full ${panelButtonClass()} disabled:cursor-default disabled:opacity-40`}
+        >
+          Live
+        </button>
+      </section>
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Advance</div>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            type="button"
+            onClick={() => advanceCalendarHand("week", WEEK_STEP_DEG)}
+            className={panelButtonClass()}
+          >
+            Week +1
+          </button>
+          <button
+            type="button"
+            onClick={() => advanceCalendarHand("day", DAY_SECTOR_STEP_DEG)}
+            className={panelButtonClass()}
+          >
+            Day +1
+          </button>
+          <button type="button" onClick={advanceDateWheel} className={panelButtonClass()}>
+            Date +1
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+
+  const layersTab = (
+    <div className="flex flex-col gap-3 text-black">
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Layers</div>
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
+            className={panelButtonClass()}
+          >
+            {PHOTO_LABEL[opacityIdx]}
+          </button>
+          <button
+            type="button"
+            onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
+            className={panelButtonClass()}
+          >
+            {referenceImage.label}
+          </button>
+          <button
+            type="button"
+            aria-pressed={drawVisible}
+            onClick={() => setDrawVisible((v) => !v)}
+            className={panelButtonClass(drawVisible)}
+          >
+            Drawing
+          </button>
+          <button
+            type="button"
+            aria-pressed={textVisible}
+            onClick={() => setTextVisible((visible) => !visible)}
+            className={panelButtonClass(textVisible)}
+          >
+            Text
+          </button>
+          <button
+            type="button"
+            aria-pressed={guidesVisible}
+            onClick={() => setGuidesVisible((visible) => !visible)}
+            className={panelButtonClass(guidesVisible)}
+          >
+            Guides
+          </button>
+          <button
+            type="button"
+            aria-pressed={handsVisible}
+            onClick={() => setHandsVisible((visible) => !visible)}
+            className={panelButtonClass(handsVisible)}
+          >
+            Hands
+          </button>
+        </div>
+      </section>
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Hands</div>
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            aria-pressed={weekHandVisible}
+            onClick={() => setWeekHandVisible((visible) => !visible)}
+            className={panelButtonClass(weekHandVisible)}
+          >
+            Week
+          </button>
+          <button
+            type="button"
+            aria-pressed={dayHandVisible}
+            onClick={() => setDayHandVisible((visible) => !visible)}
+            className={panelButtonClass(dayHandVisible)}
+          >
+            Day
+          </button>
+          <button
+            type="button"
+            aria-pressed={hourHandVisible}
+            onClick={() => setHourHandVisible((visible) => !visible)}
+            className={panelButtonClass(hourHandVisible)}
+          >
+            Hour
+          </button>
+          <button
+            type="button"
+            aria-pressed={minuteHandVisible}
+            onClick={() => setMinuteHandVisible((visible) => !visible)}
+            className={panelButtonClass(minuteHandVisible)}
+          >
+            Minute
+          </button>
+          <button
+            type="button"
+            aria-pressed={secondsHandVisible}
+            onClick={() => setSecondsHandVisible((visible) => !visible)}
+            className={panelButtonClass(secondsHandVisible)}
+          >
+            Second
+          </button>
+        </div>
+      </section>
+      <section>
+        <div className="mb-1 text-[10px] font-bold">Markers</div>
+        <button
+          type="button"
+          aria-pressed={markerMode === "3d"}
+          onClick={() => setMarkerMode((mode) => (mode === "flat" ? "3d" : "flat"))}
+          className={`w-full ${panelButtonClass()}`}
+        >
+          {markerMode === "3d" ? "Markers: 3D" : "Markers: Flat"}
+        </button>
+      </section>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
       {!screensaver && (
@@ -2512,184 +2761,16 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
           >
             ⚙️
           </button>
-          {[10, 100, 1000, 10_000, 100_000].map((multiplier) => {
-            const active = timeScale === multiplier;
-            return (
-              <button
-                key={multiplier}
-                type="button"
-                aria-pressed={active}
-                title={active ? "Return to real-time speed" : `Run time at ${multiplier}×`}
-                onClick={() => setTimeMultiplier(multiplier)}
-                className={`rounded-lg border-2 border-white/40 px-3 py-2 text-sm font-semibold shadow-lg transition active:scale-95 ${
-                  active
-                    ? "bg-black text-white hover:bg-zinc-800"
-                    : "bg-white text-black hover:bg-zinc-100"
-                }`}
-              >
-                {multiplier.toLocaleString("en-US")}x
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            title="Reset the simulated watch to the current local time"
-            onClick={resetTimeToNow}
-            className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-          >
-            Now
-          </button>
         </div>
       )}
 
       {uiVisible && (
-        <div className="fixed left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-black/20 bg-white/90 p-2 shadow-lg backdrop-blur">
-          <label htmlFor="hand-selector" className="pl-2 text-sm font-semibold text-black">
-            Hand
-          </label>
-          <select
-            id="hand-selector"
-            value={selectedHand}
-            onChange={(event) => setSelectedHand(event.target.value as HandKey)}
-            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black"
-          >
-            {HAND_OPTIONS.map((hand) => (
-              <option key={hand.value} value={hand.value}>
-                {hand.label}
-              </option>
-            ))}
-          </select>
-          <output className="min-w-14 text-right text-sm font-semibold tabular-nums text-black">
-            {selectedHandAngle.toFixed(1)}°
-          </output>
-          <button
-            type="button"
-            aria-pressed={!timeRunning}
-            onClick={toggleTimeRunning}
-            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100"
-          >
-            {timeRunning ? "Pause" : "Continue"}
-          </button>
-          <button
-            type="button"
-            disabled={manualHandAngles[selectedHand] === undefined}
-            onClick={returnSelectedHandToLive}
-            className="rounded-lg border border-black/30 bg-white px-3 py-2 text-sm font-semibold text-black transition hover:bg-zinc-100 disabled:cursor-default disabled:opacity-40"
-          >
-            Live
-          </button>
-        </div>
-      )}
-
-      {uiVisible && capturedDateRingAngles.length > 0 && (
-        <aside className="fixed right-20 top-3 z-30 w-44 rounded-xl border border-black/20 bg-white/90 p-3 text-black shadow-lg backdrop-blur">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold">Date angles</h2>
-            <button
-              type="button"
-              onClick={() => setCapturedDateRingAngles([])}
-              className="text-[10px] font-semibold text-black/60 hover:text-black"
-            >
-              Clear
-            </button>
-          </div>
-          <ol className="max-h-40 space-y-1 overflow-y-auto text-xs tabular-nums">
-            {capturedDateRingAngles.map((angle, index) => (
-              <li key={`${index}-${angle}`} className="flex justify-between gap-2">
-                <span className="text-black/50">#{index + 1}</span>
-                <span>{angle.toFixed(1)}°</span>
-              </li>
-            ))}
-          </ol>
-        </aside>
-      )}
-
-      {uiVisible && (
-        <div className="fixed bottom-3 left-3 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
-          <span className="text-xs font-semibold tabular-nums text-black">0°</span>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            step={0.1}
-            value={dateRingSliderAngle}
-            aria-label="Rotate date ring"
-            onChange={(event) => {
-              const angle = Number(event.target.value);
-              let closestDay = 1;
-              let closestDistance = Number.POSITIVE_INFINITY;
-              DATE_WHEEL_CALIBRATION.measuredAnglesDeg.forEach((measuredAngle, index) => {
-                const distance = Math.abs(((angle - measuredAngle + 540) % 360) - 180);
-                if (distance < closestDistance) {
-                  closestDistance = distance;
-                  closestDay = index + 1;
-                }
-              });
-              setDateWheelManualDayOrdinal(localCalendarDayOrdinal(clockTime ?? new Date()));
-              setDateRingRotation(angle);
-              setDateWheelDay(closestDay);
-            }}
-            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
-            style={{ writingMode: "vertical-lr" }}
-          />
-          <span className="text-xs font-semibold tabular-nums text-black">360°</span>
-        </div>
-      )}
-
-      {uiVisible && (
-        <div className="fixed bottom-3 left-16 top-16 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
-          <output className="text-[10px] font-semibold tabular-nums text-black">
-            {Math.round(dateRingRadius)}px
-          </output>
-          <input
-            type="range"
-            min={600}
-            max={1050}
-            step="any"
-            value={dateRingRadius}
-            aria-label="Resize date ring"
-            onChange={(event) => setDateRingRadius(Number(event.target.value))}
-            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
-            style={{ writingMode: "vertical-lr" }}
-          />
-          <span className="text-[10px] font-semibold text-black">Size</span>
-        </div>
-      )}
-
-      {uiVisible && (
-        <div className="fixed bottom-3 right-3 top-3 z-30 flex w-12 flex-col items-center gap-1 rounded-xl border border-black/20 bg-white/90 py-2 shadow-lg backdrop-blur">
-          <span className="text-xs font-semibold tabular-nums text-black">0°</span>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            step={0.1}
-            value={selectedHandAngle}
-            aria-label={`Rotate ${selectedHand} hand`}
-            onChange={(event) => {
-              const angle = Number(event.target.value);
-              if (selectedHand === "day" || selectedHand === "week") {
-                const currentDate = clockTime ?? new Date();
-                const currentIsoWeek = isoWeekCoordinates(currentDate);
-                manualCalendarHandPeriodRef.current[selectedHand] =
-                  selectedHand === "day"
-                    ? localCalendarDayOrdinal(currentDate)
-                    : currentIsoWeek.year * 100 + currentIsoWeek.week;
-              }
-              setManualHandAngles((angles) => ({ ...angles, [selectedHand]: angle }));
-            }}
-            className="min-h-0 w-7 flex-1 cursor-pointer accent-black"
-            style={{ writingMode: "vertical-lr" }}
-          />
-          <span className="text-xs font-semibold tabular-nums text-black">360°</span>
-        </div>
-      )}
-
-      {uiVisible && (
-        <HemisphereLightControl
+        <ControlPanel
           brightness={markerLightBrightness}
           dateWindowLight={dateWindowLightSettings}
+          layersTab={layersTab}
           position={lightDiskPosition}
+          timeTab={timeTab}
           onBrightnessChange={setMarkerLightBrightness}
           onChange={setLightDiskPosition}
           onDateWindowLightChange={setDateWindowLightSettings}
@@ -2716,10 +2797,10 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
             draggable={false}
             className="absolute select-none transition-transform duration-[180ms] ease-[cubic-bezier(0.2,0.85,0.25,1)]"
             style={{
-              left: `calc(${((CX - dateRingRadius) / IMG_W) * 100}% + ${dateRingOffset.x}px)`,
-              top: `calc(${((CY - dateRingRadius) / IMG_H) * 100}% + ${dateRingOffset.y}px)`,
-              width: `${((dateRingRadius * 2) / IMG_W) * 100}%`,
-              height: `${((dateRingRadius * 2) / IMG_H) * 100}%`,
+              left: `calc(${((CX - DATE_RING_DEFAULT_RADIUS) / IMG_W) * 100}% + ${DATE_RING_OFFSET_X}px)`,
+              top: `calc(${((CY - DATE_RING_DEFAULT_RADIUS) / IMG_H) * 100}% + ${DATE_RING_OFFSET_Y}px)`,
+              width: `${((DATE_RING_DEFAULT_RADIUS * 2) / IMG_W) * 100}%`,
+              height: `${((DATE_RING_DEFAULT_RADIUS * 2) / IMG_H) * 100}%`,
               opacity: DATE_RING_OPACITY,
               transform: `rotate(${dateRingRotation}deg)`,
             }}
@@ -3081,201 +3162,6 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
             </g>
           ))}
         </svg>
-      </div>
-
-      <div className="flex flex-col items-center gap-2">
-        {uiVisible && (
-          <>
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setOpacityIdx((i) => (i + 1) % PHOTO_OPACITY.length)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {PHOTO_LABEL[opacityIdx]}
-              </button>
-              <button
-                type="button"
-                onClick={() => setReferenceIdx((index) => (index + 1) % REFERENCE_IMAGES.length)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {referenceImage.label}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawVisible((v) => !v)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {drawVisible ? "Drawing: ON" : "Drawing: OFF"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTextVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {textVisible ? "Text: ON" : "Text: OFF"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setGuidesVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {guidesVisible ? "Guides: ON" : "Guides: OFF"}
-              </button>
-              <button
-                type="button"
-                aria-pressed={handsVisible}
-                onClick={() => setHandsVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-xs font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {handsVisible ? "Hands: ON" : "Hands: OFF"}
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                aria-pressed={weekHandVisible}
-                onClick={() => setWeekHandVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {weekHandVisible ? "Week: ON" : "Week: OFF"}
-              </button>
-              <button
-                type="button"
-                aria-pressed={dayHandVisible}
-                onClick={() => setDayHandVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {dayHandVisible ? "Day: ON" : "Day: OFF"}
-              </button>
-              <button
-                type="button"
-                aria-pressed={hourHandVisible}
-                onClick={() => setHourHandVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {hourHandVisible ? "Hour: ON" : "Hour: OFF"}
-              </button>
-              <button
-                type="button"
-                aria-pressed={minuteHandVisible}
-                onClick={() => setMinuteHandVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {minuteHandVisible ? "Minute: ON" : "Minute: OFF"}
-              </button>
-              <button
-                type="button"
-                aria-pressed={secondsHandVisible}
-                onClick={() => setSecondsHandVisible((visible) => !visible)}
-                className="shrink-0 rounded-lg border-2 border-white/40 bg-white px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {secondsHandVisible ? "Second: ON" : "Second: OFF"}
-              </button>
-            </div>
-          </>
-        )}
-        {uiVisible && (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              aria-pressed={markerMode === "3d"}
-              onClick={() => setMarkerMode((mode) => (mode === "flat" ? "3d" : "flat"))}
-              className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-            >
-              {markerMode === "3d" ? "Markers: 3D" : "Markers: Flat"}
-            </button>
-            <>
-              <button
-                type="button"
-                onClick={() => advanceCalendarHand("week", WEEK_STEP_DEG)}
-                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                Week +1
-              </button>
-              <button
-                type="button"
-                onClick={() => advanceCalendarHand("day", DAY_SECTOR_STEP_DEG)}
-                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                Day +1
-              </button>
-              <button
-                type="button"
-                onClick={advanceDateWheel}
-                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                Date +1
-              </button>
-            </>
-          </div>
-        )}
-        {uiVisible && (
-          <div className="flex items-center justify-center gap-2">
-            <output
-              className="rounded-lg border-2 border-white/40 bg-white px-3 py-2 text-sm font-semibold tabular-nums text-black shadow-lg"
-              aria-label={`Date ring center offset X ${dateRingOffset.x} pixels, Y ${dateRingOffset.y} pixels`}
-            >
-              X {dateRingOffset.x >= 0 ? "+" : ""}
-              {dateRingOffset.x}px · Y {dateRingOffset.y >= 0 ? "+" : ""}
-              {dateRingOffset.y}px
-            </output>
-            {[
-              {
-                label: "X−",
-                axis: "x" as const,
-                delta: -1,
-                description: "Move date ring left 1 pixel",
-              },
-              {
-                label: "X+",
-                axis: "x" as const,
-                delta: 1,
-                description: "Move date ring right 1 pixel",
-              },
-              {
-                label: "Y−",
-                axis: "y" as const,
-                delta: -1,
-                description: "Move date ring up 1 pixel",
-              },
-              {
-                label: "Y+",
-                axis: "y" as const,
-                delta: 1,
-                description: "Move date ring down 1 pixel",
-              },
-            ].map(({ label, axis, delta, description }) => (
-              <button
-                key={label}
-                type="button"
-                aria-label={description}
-                title={description}
-                onClick={() =>
-                  setDateRingOffset((offset) => ({
-                    ...offset,
-                    [axis]: offset[axis] + delta,
-                  }))
-                }
-                className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() =>
-                setCapturedDateRingAngles((angles) => [
-                  ...angles,
-                  Math.round(dateRingSliderAngle * 10) / 10,
-                ])
-              }
-              className="rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95"
-            >
-              Capture angle
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
