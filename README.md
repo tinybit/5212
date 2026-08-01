@@ -85,6 +85,10 @@ The **Light** tab positions a broad source on a hemisphere and controls its brig
 
 The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and the controls window hidden.
 
+## 3D view
+
+The persistent `3D` button in the top-right corner switches to a rotatable three.js model of the watch (`src/components/Watch3D.tsx`). Trackball-style controls tumble the watch freely in any direction with no pole lock — including fully around to its dark case back — with scroll to zoom and right-drag to pan. The view opens straight-on with 12 o'clock up, and `Reset view` returns to exactly that framing. A `⚙️` button opens the 3D settings panel: visibility toggles for the markers, date wheel, and each of the five hands, plus key-light direction, elevation, intensity, and ambient sliders. The model reuses the calibrated photo-pixel geometry exported from `WeeklyCalendarWatch` (`WATCH_GEOMETRY`): the dial is a disc textured with the aligned dial-only reference, the date aperture is a real cutout with walls and a recessed rotating date wheel, the hour markers are the measured four-facet prisms, and all five hands are built from their measured silhouettes and ridge heights at their physical stacking order. The dial is presented caseless, closed by a slim dark rim and back. Hands run on live local time with the same eight-step seconds beat and perpetual week/day/date synchronization as the simulator.
+
 ## Key files
 
 - `src/components/WeeklyCalendarWatch.tsx` — geometry, measured coordinates, hand shapes, clock calculations, and SVG rendering.

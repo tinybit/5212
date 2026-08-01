@@ -1,6 +1,7 @@
 import { r as __toESM } from "../_runtime.mjs";
 import { M as require_react, h as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-Cvrk8K71.js
+import { S as TextureLoader, _ as MeshStandardMaterial, a as BufferGeometry, b as Scene, c as Color, d as ExtrudeGeometry, f as Float32BufferAttribute, g as MeshPhysicalMaterial, h as MeshBasicMaterial, i as WebGLRenderer, l as CylinderGeometry, m as Mesh, n as TrackballControls, o as CanvasTexture, p as Group, r as PMREMGenerator, s as CircleGeometry, t as RoomEnvironment, u as DirectionalLight, v as PerspectiveCamera, x as Shape, y as SRGBColorSpace } from "../_libs/three.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CHExS9M5.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function isoWeekCoordinates(date) {
@@ -279,9 +280,20 @@ var WEEK_OFFSET_DEG = 6.5;
 /** Hour baton geometry (photo px). */
 var R_BATON_OUT = 799;
 var R_BATON_IN = 616;
-var R_BATON_IN_APEX = 647;
-var R_BATON_IN_APEX_MIRROR = 588;
+/**
+* Diamond radii re-measured from perpendicular macro photography (Aug 2026),
+* re-opening the earlier 647/588 estimates: the real facet is a perfect
+* square rotated 45° — the pointy arrow corner is exactly 90°, so tip and
+* ridge-end each sit one half-width (24px) from the side-corner line.
+*/
+var R_BATON_IN_APEX = 640;
+var R_BATON_IN_APEX_MIRROR = 592;
 var BATON_HALF_W = 24;
+/**
+* Outer ground facet: a right-angle isosceles triangle — exactly half of the
+* 48×48 diamond square, so its apex matches the arrow's 90° point (Aug 2026).
+*/
+var BATON_OUTER_END_DEPTH = 24;
 var BATON_12_LATERAL = 30;
 /** Seconds-hand geometry measured from the orthographic reference. */
 var SECOND_HAND_TIP_Y = 536;
@@ -838,7 +850,16 @@ function annularSectorPath(angleDeg, radius, halfThickness, halfLength) {
 		"Z"
 	].join(" ");
 }
-var MARKER_PRISM_HEIGHT = 34;
+/**
+* Marker heights tuned against macro photography (Aug 2026): a low ridge on
+* a vertical-walled base slab. The flat diamond grind plane runs from the
+* eaves to the inner ridge end; with the 90° square diamond its tip height
+* is `2 × base − ridge` (= 4px here), floating above the dial on a vertical
+* tip wall — the facet never reaches the base.
+*/
+var MARKER_PRISM_HEIGHT = 16;
+/** Base:rise ≈ 2.3:1, solved from the raking macro's band structure. */
+var MARKER_BASE_HEIGHT = 11.2;
 var LIGHT_HEMISPHERE_RADIUS = R_DIAL_EDGE * 6;
 function markerWorldPoint(point, angle, lateralOffset) {
 	const rotated = rotateVector({
@@ -902,7 +923,7 @@ function FlatHourBaton({ degFrom12, lateralOffset = 0 }) {
 	const x0 = CX;
 	const hw = BATON_HALF_W;
 	const yOut = CY - R_BATON_OUT;
-	const yOutApex = 559.5;
+	const yOutApex = 556;
 	const yIn = CY - R_BATON_IN;
 	const yInApex = CY - R_BATON_IN_APEX;
 	const yInTip = CY - R_BATON_IN_APEX_MIRROR;
@@ -1019,7 +1040,7 @@ function LitHourBaton({ degFrom12, lightBrightness, lightPosition, lateralOffset
 	};
 	const outerRidge = {
 		x: 0,
-		y: -771.5,
+		y: -775,
 		z: MARKER_PRISM_HEIGHT
 	};
 	const innerLeft = {
@@ -1034,12 +1055,12 @@ function LitHourBaton({ degFrom12, lightBrightness, lightPosition, lateralOffset
 	};
 	const innerRidge = {
 		x: 0,
-		y: -647,
+		y: -640,
 		z: MARKER_PRISM_HEIGHT
 	};
 	const innerTip = {
 		x: 0,
-		y: -588,
+		y: -592,
 		z: 0
 	};
 	const innerLeftNormal = faceNormal(innerTip, innerLeft, innerRidge);
@@ -3214,13 +3235,1009 @@ function WeeklyCalendarWatch({ className = "", screensaver = false }) {
 		]
 	});
 }
+/**
+* Calibrated geometry and timing constants shared with the 3D viewer
+* (`Watch3D`). Values stay declared above, co-located with the SVG drawing
+* code, per docs/PROCESS.md §13.
+*/
+var WATCH_GEOMETRY = {
+	IMG_W,
+	IMG_H,
+	CX,
+	CY,
+	R_DIAL_EDGE,
+	R_DAY_IN,
+	R_DAY_OUT,
+	R_MINUTE,
+	MINUTE_OFFSET_DEG,
+	MINUTE_STEP_DEG,
+	MINUTE_DOT_RADIUS,
+	MINUTE_SKIP,
+	R_WEEK_IN,
+	R_WEEK_OUT,
+	R_WEEK_DOT,
+	WEEK_DOT_RADIUS,
+	MONTH_SECTOR_OFFSET_DEG,
+	DIAL_STROKE_WIDTH,
+	DATE_RING_DEFAULT_RADIUS,
+	DATE_RING_OFFSET_X,
+	DATE_RING_OFFSET_Y,
+	DATE_WHEEL_UNWRAPPED_ANGLES,
+	DATE_WINDOW_CLIP_LEFT,
+	DATE_WINDOW_CLIP_TOP,
+	DATE_WINDOW_CLIP_RIGHT,
+	DATE_WINDOW_CLIP_BOTTOM,
+	R_BATON_OUT,
+	R_BATON_IN,
+	R_BATON_IN_APEX,
+	R_BATON_IN_APEX_MIRROR,
+	BATON_HALF_W,
+	BATON_OUTER_END_DEPTH,
+	BATON_12_LATERAL,
+	MARKER_PRISM_HEIGHT,
+	MARKER_BASE_HEIGHT,
+	SINGLE_BATON_HOURS,
+	hourAngleDeg,
+	WEEK_COUNT,
+	WEEK_OFFSET_DEG,
+	WEEK_STEP_DEG,
+	DAY_SECTOR_OFFSET_DEG,
+	DAY_SECTOR_STEP_DEG,
+	HOUR_HAND_TIP_RADIUS,
+	HOUR_HAND_REAR_RADIUS,
+	HOUR_HAND_BASE_RADIUS,
+	HOUR_HAND_HALF_WIDTH,
+	HOUR_HAND_TIP_HALF_WIDTH,
+	HOUR_HAND_PRISM_HEIGHT,
+	MINUTE_HAND_TIP_RADIUS,
+	MINUTE_HAND_REAR_RADIUS,
+	MINUTE_HAND_BASE_RADIUS,
+	MINUTE_HAND_HALF_WIDTH,
+	MINUTE_HAND_PRISM_HEIGHT,
+	WEEK_HAND_HEAD_RADIUS,
+	WEEK_HAND_SHAFT_START_RADIUS,
+	WEEK_HAND_SHAFT_HALF_WIDTH,
+	WEEK_HAND_HEAD_HALF_LENGTH,
+	WEEK_HAND_HEAD_HALF_THICKNESS,
+	DAY_HAND_HEAD_RADIUS,
+	DAY_HAND_SHAFT_START_RADIUS,
+	DAY_HAND_SHAFT_HALF_WIDTH,
+	DAY_HAND_HEAD_HALF_LENGTH,
+	DAY_HAND_HEAD_HALF_THICKNESS,
+	SECOND_HAND_TIP_Y,
+	SECOND_HAND_NECK_Y,
+	SECOND_HAND_TIP_HALF_W,
+	SECOND_HAND_NECK_HALF_W,
+	SECOND_HAND_HUB_RADIUS,
+	SECOND_HAND_TAIL_SHOULDER_Y,
+	SECOND_HAND_TAIL_END_Y,
+	SECOND_HAND_TAIL_POINT_Y,
+	SECOND_HAND_TAIL_SHOULDER_HALF_W,
+	SECOND_HAND_TAIL_END_HALF_W,
+	SECOND_HAND_TICK_MS,
+	SECOND_HAND_DEGREES_PER_TICK
+};
+var DEG = Math.PI / 180;
+/**
+* Scene units are photo pixels of the 2911×2683 orthographic reference, so
+* every calibrated constant transfers directly. Photo coordinates map to
+* three.js watch space as (x - CX, CY - y, z): +Y is 12 o'clock, +Z rises off
+* the dial toward the viewer.
+*
+* Hand and marker meshes are built in "hand space" pointing at 12 o'clock
+* (+Y = along, +X = lateral); a screen-clockwise dial angle θ becomes
+* `rotation.z = -θ`.
+*/
+/** Vertical stack (photo px above the dial face). */
+var STACK = {
+	dateWheel: -12,
+	movementBackdrop: -18,
+	dayHand: 6,
+	weekHand: 13,
+	hourHand: 20,
+	minuteHand: 30,
+	secondsHand: 52
+};
+/**
+* The 2D simulator calibrated the date-ring center offset in rendered CSS
+* pixels at the 720px layout width; convert to photo pixels for the scene.
+*/
+var DATE_WHEEL_OFFSET_SCALE = WATCH_GEOMETRY.IMG_W / 720;
+var FLAT_HAND_DEPTH = 4;
+/** Triangle-fan mesh from a list of flat convex polygons (hand space). */
+function polygonGeometry(polygons) {
+	const positions = [];
+	for (const polygon of polygons) for (let i = 1; i + 1 < polygon.length; i++) positions.push(...polygon[0], ...polygon[i], ...polygon[i + 1]);
+	const geometry = new BufferGeometry();
+	geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+	geometry.computeVertexNormals();
+	return geometry;
+}
+function outlineGeometry(outline, depth) {
+	const shape = new Shape();
+	outline.forEach(([x, y], index) => {
+		if (index === 0) shape.moveTo(x, y);
+		else shape.lineTo(x, y);
+	});
+	return new ExtrudeGeometry(shape, {
+		depth,
+		bevelEnabled: false
+	});
+}
+/**
+* Applied hour marker — a triangular prism standing on a vertical-walled
+* base slab (macro references show a polished vertical band running around
+* the whole footprint; the top facets never reach the dial).
+*
+* The inner diamond is ONE flat grind plane through both eave corners and
+* the inner ridge end. Its pointed tip terminates ABOVE the dial, on a
+* vertical tip wall over the slab's pointed footprint — the facet never
+* dives to the base (macro reference: the bright rhombus sits on dark slab
+* material). The tip height is dictated by that plane's slope, keeping the
+* facet exactly planar with no fold, and the plan view identical to the
+* calibrated artwork.
+*/
+function batonGeometry() {
+	const hw = WATCH_GEOMETRY.BATON_HALF_W;
+	const ridgeHeight = WATCH_GEOMETRY.MARKER_PRISM_HEIGHT;
+	const eaveHeight = WATCH_GEOMETRY.MARKER_BASE_HEIGHT;
+	const tipHeight = eaveHeight - (ridgeHeight - eaveHeight) / (WATCH_GEOMETRY.R_BATON_IN_APEX - WATCH_GEOMETRY.R_BATON_IN) * (WATCH_GEOMETRY.R_BATON_IN - WATCH_GEOMETRY.R_BATON_IN_APEX_MIRROR);
+	const outerLeftBottom = [
+		-hw,
+		WATCH_GEOMETRY.R_BATON_OUT,
+		0
+	];
+	const outerRightBottom = [
+		hw,
+		WATCH_GEOMETRY.R_BATON_OUT,
+		0
+	];
+	const outerLeftEave = [
+		-hw,
+		WATCH_GEOMETRY.R_BATON_OUT,
+		eaveHeight
+	];
+	const outerRightEave = [
+		hw,
+		WATCH_GEOMETRY.R_BATON_OUT,
+		eaveHeight
+	];
+	const innerLeftBottom = [
+		-hw,
+		WATCH_GEOMETRY.R_BATON_IN,
+		0
+	];
+	const innerRightBottom = [
+		hw,
+		WATCH_GEOMETRY.R_BATON_IN,
+		0
+	];
+	const innerLeftEave = [
+		-hw,
+		WATCH_GEOMETRY.R_BATON_IN,
+		eaveHeight
+	];
+	const innerRightEave = [
+		hw,
+		WATCH_GEOMETRY.R_BATON_IN,
+		eaveHeight
+	];
+	const outerRidge = [
+		0,
+		WATCH_GEOMETRY.R_BATON_OUT - WATCH_GEOMETRY.BATON_OUTER_END_DEPTH,
+		ridgeHeight
+	];
+	const innerRidge = [
+		0,
+		WATCH_GEOMETRY.R_BATON_IN_APEX,
+		ridgeHeight
+	];
+	const facetTip = [
+		0,
+		WATCH_GEOMETRY.R_BATON_IN_APEX_MIRROR,
+		tipHeight
+	];
+	const slabTip = [
+		0,
+		WATCH_GEOMETRY.R_BATON_IN_APEX_MIRROR,
+		0
+	];
+	return polygonGeometry([
+		[
+			outerLeftEave,
+			outerRightEave,
+			outerRidge
+		],
+		[
+			outerLeftEave,
+			outerRidge,
+			innerRidge,
+			innerLeftEave
+		],
+		[
+			outerRightEave,
+			innerRightEave,
+			innerRidge,
+			outerRidge
+		],
+		[
+			facetTip,
+			innerLeftEave,
+			innerRidge,
+			innerRightEave
+		],
+		[
+			outerLeftBottom,
+			outerRightBottom,
+			outerRightEave,
+			outerLeftEave
+		],
+		[
+			outerLeftBottom,
+			outerLeftEave,
+			innerLeftEave,
+			innerLeftBottom
+		],
+		[
+			outerRightBottom,
+			innerRightBottom,
+			innerRightEave,
+			outerRightEave
+		],
+		[
+			slabTip,
+			innerLeftBottom,
+			innerLeftEave,
+			facetTip
+		],
+		[
+			slabTip,
+			facetTip,
+			innerRightEave,
+			innerRightBottom
+		]
+	]);
+}
+/** Two-facet Dauphine hour hand with the solved planar ridge tip. */
+function hourHandGeometry() {
+	const ridgeRear = {
+		x: 0,
+		y: WATCH_GEOMETRY.HOUR_HAND_REAR_RADIUS,
+		z: WATCH_GEOMETRY.HOUR_HAND_PRISM_HEIGHT
+	};
+	const positiveBase = {
+		x: WATCH_GEOMETRY.HOUR_HAND_HALF_WIDTH,
+		y: WATCH_GEOMETRY.HOUR_HAND_BASE_RADIUS,
+		z: 0
+	};
+	const positiveTip = {
+		x: WATCH_GEOMETRY.HOUR_HAND_TIP_HALF_WIDTH,
+		y: WATCH_GEOMETRY.HOUR_HAND_TIP_RADIUS,
+		z: 0
+	};
+	const ridgeTipHeight = planeHeightAt(ridgeRear, positiveTip, positiveBase, 0, WATCH_GEOMETRY.HOUR_HAND_TIP_RADIUS);
+	const rr = [
+		ridgeRear.x,
+		ridgeRear.y,
+		ridgeRear.z
+	];
+	const ridgeTip = [
+		0,
+		WATCH_GEOMETRY.HOUR_HAND_TIP_RADIUS,
+		ridgeTipHeight
+	];
+	const posBase = [
+		positiveBase.x,
+		positiveBase.y,
+		0
+	];
+	const posTip = [
+		positiveTip.x,
+		positiveTip.y,
+		0
+	];
+	const negBase = [
+		-positiveBase.x,
+		positiveBase.y,
+		0
+	];
+	const negTip = [
+		-positiveTip.x,
+		positiveTip.y,
+		0
+	];
+	return polygonGeometry([[
+		rr,
+		posBase,
+		posTip,
+		ridgeTip
+	], [
+		rr,
+		ridgeTip,
+		negTip,
+		negBase
+	]]);
+}
+/** Two-facet Dauphine minute hand (full-height ridge to the pointed tip). */
+function minuteHandGeometry() {
+	const ridgeRear = [
+		0,
+		WATCH_GEOMETRY.MINUTE_HAND_REAR_RADIUS,
+		WATCH_GEOMETRY.MINUTE_HAND_PRISM_HEIGHT
+	];
+	const ridgeTip = [
+		0,
+		WATCH_GEOMETRY.MINUTE_HAND_TIP_RADIUS,
+		WATCH_GEOMETRY.MINUTE_HAND_PRISM_HEIGHT
+	];
+	const negativeBase = [
+		-WATCH_GEOMETRY.MINUTE_HAND_HALF_WIDTH,
+		WATCH_GEOMETRY.MINUTE_HAND_BASE_RADIUS,
+		0
+	];
+	const positiveBase = [
+		WATCH_GEOMETRY.MINUTE_HAND_HALF_WIDTH,
+		WATCH_GEOMETRY.MINUTE_HAND_BASE_RADIUS,
+		0
+	];
+	return polygonGeometry([[
+		ridgeRear,
+		negativeBase,
+		ridgeTip
+	], [
+		ridgeRear,
+		ridgeTip,
+		positiveBase
+	]]);
+}
+/** Red annular-sector hammer head, concentric with its dial rail. */
+function hammerHeadGeometry(headRadius, halfLength, halfThickness, depth) {
+	const halfAngle = halfLength / headRadius;
+	const start = Math.PI / 2 - halfAngle;
+	const end = Math.PI / 2 + halfAngle;
+	const shape = new Shape();
+	shape.absarc(0, 0, headRadius + halfThickness, start, end, false);
+	shape.absarc(0, 0, headRadius - halfThickness, end, start, true);
+	return new ExtrudeGeometry(shape, {
+		depth,
+		bevelEnabled: false,
+		curveSegments: 24
+	});
+}
+/** Aperture walls connecting the dial cutout down to the date wheel. */
+function dateWindowWallGeometry() {
+	const left = WATCH_GEOMETRY.DATE_WINDOW_CLIP_LEFT - WATCH_GEOMETRY.CX;
+	const right = WATCH_GEOMETRY.DATE_WINDOW_CLIP_RIGHT - WATCH_GEOMETRY.CX;
+	const top = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_TOP;
+	const bottom = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_BOTTOM;
+	const depth = STACK.dateWheel;
+	return polygonGeometry([
+		[
+			[
+				left,
+				top,
+				0
+			],
+			[
+				right,
+				top,
+				0
+			],
+			[
+				right,
+				top,
+				depth
+			],
+			[
+				left,
+				top,
+				depth
+			]
+		],
+		[
+			[
+				right,
+				top,
+				0
+			],
+			[
+				right,
+				bottom,
+				0
+			],
+			[
+				right,
+				bottom,
+				depth
+			],
+			[
+				right,
+				top,
+				depth
+			]
+		],
+		[
+			[
+				right,
+				bottom,
+				0
+			],
+			[
+				left,
+				bottom,
+				0
+			],
+			[
+				left,
+				bottom,
+				depth
+			],
+			[
+				right,
+				bottom,
+				depth
+			]
+		],
+		[
+			[
+				left,
+				bottom,
+				0
+			],
+			[
+				left,
+				top,
+				0
+			],
+			[
+				left,
+				top,
+				depth
+			],
+			[
+				left,
+				bottom,
+				depth
+			]
+		]
+	]);
+}
+/**
+* Draw the calibrated dial linework (the 2D view's "Drawing" layer) into the
+* dial texture: rails, sector lines, week dots, and minute markers. Without
+* this, the 3D dial only shows the photo's faint printed lines.
+*/
+function drawDialLinework(ctx) {
+	const point = (deg, radius) => ({
+		x: WATCH_GEOMETRY.CX + Math.sin(deg * DEG) * radius,
+		y: WATCH_GEOMETRY.CY - Math.cos(deg * DEG) * radius
+	});
+	ctx.strokeStyle = "#000000";
+	ctx.fillStyle = "#000000";
+	ctx.lineWidth = WATCH_GEOMETRY.DIAL_STROKE_WIDTH;
+	const circle = (radius, fill = false) => {
+		ctx.beginPath();
+		ctx.arc(WATCH_GEOMETRY.CX, WATCH_GEOMETRY.CY, radius, 0, Math.PI * 2);
+		if (fill) ctx.fill();
+		else ctx.stroke();
+	};
+	const radialLine = (deg, r0, r1) => {
+		const from = point(deg, r0);
+		const to = point(deg, r1);
+		ctx.beginPath();
+		ctx.moveTo(from.x, from.y);
+		ctx.lineTo(to.x, to.y);
+		ctx.stroke();
+	};
+	const dot = (deg, radius, dotRadius) => {
+		const center = point(deg, radius);
+		ctx.beginPath();
+		ctx.arc(center.x, center.y, dotRadius, 0, Math.PI * 2);
+		ctx.fill();
+	};
+	circle(WATCH_GEOMETRY.R_DIAL_EDGE);
+	circle(WATCH_GEOMETRY.R_WEEK_OUT);
+	circle(WATCH_GEOMETRY.R_WEEK_IN);
+	circle(WATCH_GEOMETRY.R_DAY_OUT);
+	circle(WATCH_GEOMETRY.R_DAY_IN);
+	for (let k = 0; k < 12; k++) radialLine(WATCH_GEOMETRY.MONTH_SECTOR_OFFSET_DEG + k * 30, WATCH_GEOMETRY.R_WEEK_OUT, WATCH_GEOMETRY.R_DIAL_EDGE);
+	for (let k = 1; k < WATCH_GEOMETRY.WEEK_COUNT; k += 2) {
+		const deg = WATCH_GEOMETRY.WEEK_OFFSET_DEG + k * WATCH_GEOMETRY.WEEK_STEP_DEG;
+		radialLine(deg, WATCH_GEOMETRY.R_WEEK_IN, WATCH_GEOMETRY.R_WEEK_OUT);
+		dot(deg, WATCH_GEOMETRY.R_WEEK_DOT, WATCH_GEOMETRY.WEEK_DOT_RADIUS + WATCH_GEOMETRY.DIAL_STROKE_WIDTH / 2);
+	}
+	for (let k = 0; k < 7; k++) radialLine(WATCH_GEOMETRY.DAY_SECTOR_OFFSET_DEG + k * WATCH_GEOMETRY.DAY_SECTOR_STEP_DEG, WATCH_GEOMETRY.R_DAY_IN, WATCH_GEOMETRY.R_DAY_OUT);
+	for (let k = 0; k < 60; k++) {
+		if (WATCH_GEOMETRY.MINUTE_SKIP.has(k)) continue;
+		dot(WATCH_GEOMETRY.MINUTE_OFFSET_DEG + k * WATCH_GEOMETRY.MINUTE_STEP_DEG, WATCH_GEOMETRY.R_MINUTE, WATCH_GEOMETRY.MINUTE_DOT_RADIUS);
+	}
+	circle(37, true);
+}
+var ELEMENT_OPTIONS = [
+	{
+		key: "markers",
+		label: "Markers"
+	},
+	{
+		key: "dateWheel",
+		label: "Date wheel"
+	},
+	{
+		key: "week",
+		label: "Week"
+	},
+	{
+		key: "day",
+		label: "Day"
+	},
+	{
+		key: "hour",
+		label: "Hour"
+	},
+	{
+		key: "minute",
+		label: "Minute"
+	},
+	{
+		key: "second",
+		label: "Second"
+	}
+];
+var LIGHT_DISTANCE = 5100;
+function toggleButtonClass(active) {
+	return `rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${active ? "border-black bg-black text-white hover:bg-zinc-800" : "border-black/25 bg-white text-black hover:bg-zinc-100"}`;
+}
+function Watch3D({ className = "" }) {
+	const containerRef = (0, import_react.useRef)(null);
+	const sceneRef = (0, import_react.useRef)(null);
+	const [resetView, setResetView] = (0, import_react.useState)(null);
+	const [panelOpen, setPanelOpen] = (0, import_react.useState)(false);
+	const [visibility, setVisibility] = (0, import_react.useState)({
+		markers: true,
+		dateWheel: true,
+		week: true,
+		day: true,
+		hour: true,
+		minute: true,
+		second: true
+	});
+	const [light, setLight] = (0, import_react.useState)({
+		azimuth: 130,
+		elevation: 48,
+		intensity: 1.4,
+		ambient: 1
+	});
+	(0, import_react.useEffect)(() => {
+		const container = containerRef.current;
+		if (!container) return;
+		const renderer = new WebGLRenderer({ antialias: true });
+		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		renderer.setSize(container.clientWidth, container.clientHeight);
+		renderer.toneMapping = 4;
+		renderer.outputColorSpace = SRGBColorSpace;
+		container.appendChild(renderer.domElement);
+		const scene = new Scene();
+		scene.background = new Color(15854048);
+		const pmrem = new PMREMGenerator(renderer);
+		const environment = pmrem.fromScene(new RoomEnvironment(), .04);
+		scene.environment = environment.texture;
+		const keyLight = new DirectionalLight(16777215, 1.4);
+		keyLight.position.set(-2200, 2600, 3800);
+		scene.add(keyLight);
+		const camera = new PerspectiveCamera(36, container.clientWidth / Math.max(1, container.clientHeight), 10, 4e4);
+		camera.position.set(0, 0, 4300);
+		const controls = new TrackballControls(camera, renderer.domElement);
+		controls.rotateSpeed = 3;
+		controls.zoomSpeed = 1.2;
+		controls.panSpeed = .8;
+		controls.dynamicDampingFactor = .12;
+		controls.minDistance = 400;
+		controls.maxDistance = 12e3;
+		controls.target.set(0, 0, 0);
+		const textureLoader = new TextureLoader();
+		const loadTexture = (fileName) => {
+			const texture = textureLoader.load(`/${fileName}`);
+			texture.colorSpace = SRGBColorSpace;
+			texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+			return texture;
+		};
+		const dateWheelTexture = loadTexture("date-ring-overlay.png");
+		const dialMaterial = new MeshBasicMaterial({
+			alphaTest: .5,
+			toneMapped: false
+		});
+		textureLoader.load(`/reference-handless-date-cutout.png`, (photo) => {
+			const canvas = document.createElement("canvas");
+			canvas.width = WATCH_GEOMETRY.IMG_W;
+			canvas.height = WATCH_GEOMETRY.IMG_H;
+			const ctx = canvas.getContext("2d");
+			let composed;
+			if (ctx) {
+				ctx.drawImage(photo.image, 0, 0);
+				drawDialLinework(ctx);
+				composed = new CanvasTexture(canvas);
+				photo.dispose();
+			} else composed = photo;
+			composed.colorSpace = SRGBColorSpace;
+			composed.anisotropy = renderer.capabilities.getMaxAnisotropy();
+			dialMaterial.map = composed;
+			dialMaterial.needsUpdate = true;
+		});
+		const polishedBlack = new MeshPhysicalMaterial({
+			color: 1118994,
+			metalness: 1,
+			roughness: .16,
+			side: 2
+		});
+		const deepBlack = new MeshPhysicalMaterial({
+			color: 592393,
+			metalness: 1,
+			roughness: .34,
+			side: 2
+		});
+		const steel = new MeshPhysicalMaterial({
+			color: 14211803,
+			metalness: 1,
+			roughness: .17,
+			side: 2
+		});
+		const redPaint = new MeshPhysicalMaterial({
+			color: 10162718,
+			metalness: 0,
+			roughness: .34,
+			clearcoat: 1,
+			clearcoatRoughness: .18,
+			side: 2
+		});
+		const graphiteShaft = new MeshPhysicalMaterial({
+			color: 3486253,
+			metalness: .85,
+			roughness: .42,
+			side: 2
+		});
+		const wallMaterial = new MeshStandardMaterial({
+			color: 12103844,
+			roughness: .9,
+			side: 2
+		});
+		const watch = new Group();
+		scene.add(watch);
+		const dialGeometry = new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, 160);
+		{
+			const positions = dialGeometry.attributes.position;
+			const uvs = dialGeometry.attributes.uv;
+			for (let i = 0; i < positions.count; i++) {
+				const x = positions.getX(i);
+				const y = positions.getY(i);
+				uvs.setXY(i, (WATCH_GEOMETRY.CX + x) / WATCH_GEOMETRY.IMG_W, 1 - (WATCH_GEOMETRY.CY - y) / WATCH_GEOMETRY.IMG_H);
+			}
+		}
+		const dial = new Mesh(dialGeometry, dialMaterial);
+		watch.add(dial);
+		const dateWheel = new Mesh(new CircleGeometry(WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS, 128), new MeshBasicMaterial({
+			map: dateWheelTexture,
+			alphaTest: .4,
+			toneMapped: false
+		}));
+		dateWheel.position.set(WATCH_GEOMETRY.DATE_RING_OFFSET_X * DATE_WHEEL_OFFSET_SCALE, -WATCH_GEOMETRY.DATE_RING_OFFSET_Y * DATE_WHEEL_OFFSET_SCALE, STACK.dateWheel);
+		watch.add(dateWheel);
+		watch.add(new Mesh(dateWindowWallGeometry(), wallMaterial));
+		const movementBackdrop = new Mesh(new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, 96), new MeshStandardMaterial({
+			color: 1447188,
+			roughness: .85,
+			side: 2
+		}));
+		movementBackdrop.position.z = STACK.movementBackdrop;
+		watch.add(movementBackdrop);
+		const markersGroup = new Group();
+		watch.add(markersGroup);
+		const sharedBaton = batonGeometry();
+		const addBaton = (angleDeg, lateralOffset = 0) => {
+			const baton = new Mesh(sharedBaton, polishedBlack);
+			const group = new Group();
+			baton.position.x = lateralOffset;
+			group.add(baton);
+			group.rotation.z = -angleDeg * DEG;
+			markersGroup.add(group);
+		};
+		for (const hour of WATCH_GEOMETRY.SINGLE_BATON_HOURS) addBaton(WATCH_GEOMETRY.hourAngleDeg(hour));
+		addBaton(0, -WATCH_GEOMETRY.BATON_12_LATERAL);
+		addBaton(0, WATCH_GEOMETRY.BATON_12_LATERAL);
+		const centerPost = new Mesh(new CylinderGeometry(37, 37, STACK.secondsHand, 48), deepBlack);
+		centerPost.rotation.x = Math.PI / 2;
+		centerPost.position.z = STACK.secondsHand / 2;
+		watch.add(centerPost);
+		const buildIndicatorHand = (config) => {
+			const group = new Group();
+			const shaft = new Mesh(outlineGeometry([
+				[-config.shaftHalfWidth, config.shaftStartRadius],
+				[-config.shaftHalfWidth, config.headRadius],
+				[config.shaftHalfWidth, config.headRadius],
+				[config.shaftHalfWidth, config.shaftStartRadius]
+			], FLAT_HAND_DEPTH), graphiteShaft);
+			const head = new Mesh(hammerHeadGeometry(config.headRadius, config.headHalfLength, config.headHalfThickness, 7), redPaint);
+			group.add(shaft);
+			group.add(head);
+			group.position.z = config.baseHeight;
+			watch.add(group);
+			return group;
+		};
+		const dayHand = buildIndicatorHand({
+			headRadius: WATCH_GEOMETRY.DAY_HAND_HEAD_RADIUS,
+			shaftStartRadius: WATCH_GEOMETRY.DAY_HAND_SHAFT_START_RADIUS,
+			shaftHalfWidth: WATCH_GEOMETRY.DAY_HAND_SHAFT_HALF_WIDTH,
+			headHalfLength: WATCH_GEOMETRY.DAY_HAND_HEAD_HALF_LENGTH,
+			headHalfThickness: WATCH_GEOMETRY.DAY_HAND_HEAD_HALF_THICKNESS,
+			baseHeight: STACK.dayHand
+		});
+		const weekHand = buildIndicatorHand({
+			headRadius: WATCH_GEOMETRY.WEEK_HAND_HEAD_RADIUS,
+			shaftStartRadius: WATCH_GEOMETRY.WEEK_HAND_SHAFT_START_RADIUS,
+			shaftHalfWidth: WATCH_GEOMETRY.WEEK_HAND_SHAFT_HALF_WIDTH,
+			headHalfLength: WATCH_GEOMETRY.WEEK_HAND_HEAD_HALF_LENGTH,
+			headHalfThickness: WATCH_GEOMETRY.WEEK_HAND_HEAD_HALF_THICKNESS,
+			baseHeight: STACK.weekHand
+		});
+		const hourHand = new Group();
+		hourHand.add(new Mesh(hourHandGeometry(), polishedBlack));
+		hourHand.position.z = STACK.hourHand;
+		watch.add(hourHand);
+		const minuteHand = new Group();
+		minuteHand.add(new Mesh(minuteHandGeometry(), polishedBlack));
+		minuteHand.position.z = STACK.minuteHand;
+		watch.add(minuteHand);
+		const secondsHand = new Group();
+		const bladeAlong = (y) => WATCH_GEOMETRY.CY - y;
+		secondsHand.add(new Mesh(outlineGeometry([
+			[-WATCH_GEOMETRY.SECOND_HAND_TIP_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TIP_Y)],
+			[WATCH_GEOMETRY.SECOND_HAND_TIP_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TIP_Y)],
+			[WATCH_GEOMETRY.SECOND_HAND_NECK_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_NECK_Y)],
+			[-WATCH_GEOMETRY.SECOND_HAND_NECK_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_NECK_Y)]
+		], 3), deepBlack));
+		secondsHand.add(new Mesh(outlineGeometry([
+			[-WATCH_GEOMETRY.SECOND_HAND_TAIL_SHOULDER_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TAIL_SHOULDER_Y)],
+			[WATCH_GEOMETRY.SECOND_HAND_TAIL_SHOULDER_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TAIL_SHOULDER_Y)],
+			[WATCH_GEOMETRY.SECOND_HAND_TAIL_END_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TAIL_END_Y)],
+			[0, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TAIL_POINT_Y)],
+			[-WATCH_GEOMETRY.SECOND_HAND_TAIL_END_HALF_W, bladeAlong(WATCH_GEOMETRY.SECOND_HAND_TAIL_END_Y)]
+		], 3), deepBlack));
+		const hub = new Mesh(new CylinderGeometry(WATCH_GEOMETRY.SECOND_HAND_HUB_RADIUS, WATCH_GEOMETRY.SECOND_HAND_HUB_RADIUS, 10, 48), steel);
+		hub.rotation.x = Math.PI / 2;
+		hub.position.z = 2;
+		secondsHand.add(hub);
+		const pin = new Mesh(new CylinderGeometry(10, 10, 16, 32), steel);
+		pin.rotation.x = Math.PI / 2;
+		pin.position.z = 6;
+		secondsHand.add(pin);
+		secondsHand.position.z = STACK.secondsHand;
+		watch.add(secondsHand);
+		const rim = new Mesh(new CylinderGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, WATCH_GEOMETRY.R_DIAL_EDGE, -STACK.movementBackdrop, 128, 1, true), new MeshStandardMaterial({
+			color: 1776153,
+			roughness: .7,
+			side: 2
+		}));
+		rim.rotation.x = Math.PI / 2;
+		rim.position.z = STACK.movementBackdrop / 2;
+		watch.add(rim);
+		const mountDate = /* @__PURE__ */ new Date();
+		const anchor = {
+			isoWeekYear: isoWeekCoordinates(mountDate).year,
+			weekday: mountDate.getDay(),
+			ordinal: localCalendarDayOrdinal(mountDate),
+			month: calendarMonthOrdinal(mountDate)
+		};
+		const updateHands = () => {
+			const now = /* @__PURE__ */ new Date();
+			const nowMs = now.getTime();
+			const secondsWithMs = now.getSeconds() + now.getMilliseconds() / 1e3;
+			const secondsDeg = Math.floor(nowMs % 6e4 / WATCH_GEOMETRY.SECOND_HAND_TICK_MS) * WATCH_GEOMETRY.SECOND_HAND_DEGREES_PER_TICK;
+			const minuteDeg = (now.getMinutes() + secondsWithMs / 60) * 6;
+			const hourDeg = (now.getHours() % 12 + now.getMinutes() / 60 + secondsWithMs / 3600) * 30;
+			const week = continuousIsoWeek(now, anchor.isoWeekYear, WATCH_GEOMETRY.WEEK_COUNT);
+			const weekDeg = WATCH_GEOMETRY.WEEK_OFFSET_DEG + (week - 1) * WATCH_GEOMETRY.WEEK_STEP_DEG;
+			const dayIndex = anchor.weekday + localCalendarDayOrdinal(now) - anchor.ordinal;
+			const dayDeg = WATCH_GEOMETRY.DAY_SECTOR_OFFSET_DEG - WATCH_GEOMETRY.DAY_SECTOR_STEP_DEG / 2 + dayIndex * WATCH_GEOMETRY.DAY_SECTOR_STEP_DEG;
+			const wheelDeg = continuousDateWheelAngle(now, anchor.month, WATCH_GEOMETRY.DATE_WHEEL_UNWRAPPED_ANGLES);
+			secondsHand.rotation.z = -secondsDeg * DEG;
+			minuteHand.rotation.z = -minuteDeg * DEG;
+			hourHand.rotation.z = -hourDeg * DEG;
+			weekHand.rotation.z = -weekDeg * DEG;
+			dayHand.rotation.z = -dayDeg * DEG;
+			dateWheel.rotation.z = -wheelDeg * DEG;
+		};
+		renderer.setAnimationLoop(() => {
+			controls.update();
+			updateHands();
+			renderer.render(scene, camera);
+		});
+		setResetView(() => () => {
+			controls.reset();
+			const internals = controls;
+			internals._movePrev.copy(internals._moveCurr);
+			internals._zoomStart.copy(internals._zoomEnd);
+			internals._panStart.copy(internals._panEnd);
+		});
+		sceneRef.current = {
+			elements: {
+				markers: markersGroup,
+				dateWheel,
+				week: weekHand,
+				day: dayHand,
+				hour: hourHand,
+				minute: minuteHand,
+				second: secondsHand
+			},
+			keyLight,
+			scene
+		};
+		const resizeObserver = new ResizeObserver(() => {
+			const width = container.clientWidth;
+			const height = Math.max(1, container.clientHeight);
+			renderer.setSize(width, height);
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+			controls.handleResize();
+		});
+		resizeObserver.observe(container);
+		return () => {
+			sceneRef.current = null;
+			setResetView(null);
+			resizeObserver.disconnect();
+			renderer.setAnimationLoop(null);
+			controls.dispose();
+			scene.traverse((object) => {
+				if (object instanceof Mesh) {
+					object.geometry.dispose();
+					(Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
+				}
+			});
+			dialMaterial.map?.dispose();
+			dateWheelTexture.dispose();
+			environment.texture.dispose();
+			pmrem.dispose();
+			renderer.dispose();
+			container.removeChild(renderer.domElement);
+		};
+	}, []);
+	(0, import_react.useEffect)(() => {
+		const handles = sceneRef.current;
+		if (!handles) return;
+		for (const { key } of ELEMENT_OPTIONS) handles.elements[key].visible = visibility[key];
+	}, [visibility]);
+	(0, import_react.useEffect)(() => {
+		const handles = sceneRef.current;
+		if (!handles) return;
+		const azimuth = light.azimuth * DEG;
+		const elevation = light.elevation * DEG;
+		handles.keyLight.position.set(Math.cos(azimuth) * Math.cos(elevation) * LIGHT_DISTANCE, Math.sin(azimuth) * Math.cos(elevation) * LIGHT_DISTANCE, Math.sin(elevation) * LIGHT_DISTANCE);
+		handles.keyLight.intensity = light.intensity;
+		handles.scene.environmentIntensity = light.ambient;
+	}, [light]);
+	const lightSliders = [
+		{
+			key: "azimuth",
+			label: "Direction",
+			min: 0,
+			max: 360,
+			step: 1,
+			valueText: `${Math.round(light.azimuth)}°`
+		},
+		{
+			key: "elevation",
+			label: "Elevation",
+			min: 5,
+			max: 85,
+			step: 1,
+			valueText: `${Math.round(light.elevation)}°`
+		},
+		{
+			key: "intensity",
+			label: "Intensity",
+			min: 0,
+			max: 3,
+			step: .05,
+			valueText: `${Math.round(light.intensity / 1.4 * 100)}%`
+		},
+		{
+			key: "ambient",
+			label: "Ambient",
+			min: 0,
+			max: 2,
+			step: .05,
+			valueText: `${Math.round(light.ambient * 100)}%`
+		}
+	];
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		ref: containerRef,
+		className: `h-dvh w-full ${className}`,
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				"aria-pressed": panelOpen,
+				"aria-label": "Toggle 3D view settings",
+				title: "3D view settings",
+				onClick: () => setPanelOpen((open) => !open),
+				className: "absolute left-3 top-3 z-10 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
+				children: "⚙️"
+			}),
+			panelOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "absolute left-3 top-16 z-10 w-56 rounded-xl border border-black/20 bg-white/90 p-3 text-black shadow-lg backdrop-blur",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mb-1 text-[10px] font-bold",
+						children: "Elements"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "grid grid-cols-2 gap-1",
+						children: ELEMENT_OPTIONS.map(({ key, label }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							"aria-pressed": visibility[key],
+							onClick: () => setVisibility((current) => ({
+								...current,
+								[key]: !current[key]
+							})),
+							className: toggleButtonClass(visibility[key]),
+							children: label
+						}, key))
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mb-1 mt-3 border-t border-black/15 pt-2 text-[10px] font-bold",
+						children: "Light"
+					}),
+					lightSliders.map((slider) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+						className: "mt-1.5 block text-[10px] font-semibold",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "flex items-center justify-between gap-2",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: slider.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("output", {
+								className: "tabular-nums",
+								children: slider.valueText
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+							type: "range",
+							min: slider.min,
+							max: slider.max,
+							step: slider.step,
+							value: light[slider.key],
+							onChange: (event) => setLight((current) => ({
+								...current,
+								[slider.key]: Number(event.target.value)
+							})),
+							className: "mt-0.5 w-full cursor-pointer accent-black",
+							"aria-label": `Light ${slider.label.toLowerCase()}`
+						})]
+					}, slider.key))
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "whitespace-nowrap rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-medium text-black/70 shadow backdrop-blur",
+					children: "Drag to rotate · Scroll to zoom · Right-drag to pan"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: () => resetView?.(),
+					className: "pointer-events-auto rounded-lg border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-semibold text-black shadow backdrop-blur transition hover:bg-white active:scale-95",
+					children: "Reset view"
+				})]
+			})
+		]
+	});
+}
 function WatchStage({ screensaver = false }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+	const [view, setView] = (0, import_react.useState)("dial");
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: `flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#f1e9e0] ${screensaver ? "p-0" : "p-3 sm:p-4"}`,
-		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeeklyCalendarWatch, {
+		children: [!screensaver && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+			type: "button",
+			"aria-pressed": view === "3d",
+			title: view === "dial" ? "Rotate the watch in 3D" : "Return to the calibrated dial view",
+			onClick: () => setView((current) => current === "dial" ? "3d" : "dial"),
+			className: "fixed right-3 top-3 z-40 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
+			children: view === "dial" ? "3D" : "Dial"
+		}), view === "dial" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeeklyCalendarWatch, {
 			screensaver,
 			className: screensaver ? "h-auto w-[min(94vw,94vh)] max-w-none" : "h-auto w-full max-w-[min(96vw,720px)]"
-		})
+		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Watch3D, { className: "fixed inset-0" })]
 	});
 }
 function Home() {

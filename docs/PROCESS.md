@@ -169,12 +169,14 @@ The printed hour markers are physical applied indices that look like short trian
 ```
 R_BATON_OUT          = 799   // outer tip
 R_BATON_IN           = 616   // base of the long faces
-R_BATON_IN_APEX      = 647   // start of the green diamond
-R_BATON_IN_APEX_MIRROR = 588 // innermost tip of the green arrow
+R_BATON_IN_APEX      = 640   // start of the green diamond (re-measured Aug 2026)
+R_BATON_IN_APEX_MIRROR = 592 // innermost tip of the green arrow (re-measured Aug 2026)
 BATON_HALF_W         = 24
-BATON_OUTER_END_DEPTH = 27.5 // yellow triangle depth
+BATON_OUTER_END_DEPTH = 24   // yellow triangle depth — right-angle apex, half of the diamond square (Aug 2026)
 BATON_12_LATERAL     = 30    // left/right offset for the double 12 markers
 ```
+
+The diamond radii were originally locked at 647/588 against the dial photograph, then re-opened and re-measured in August 2026 from perpendicular macro photos of a real marker: the facet is a **perfect square rotated 45°** — the pointy arrow corner is exactly 90°, so the tip and ridge-end points each sit one half-width (24px) from the line through the side corners (48 × 48px in plan), not the elongated 59px kite first traced. Symmetry plus the flat grind plane makes the facet's opposite edges exactly parallel in 3D.
 
 ### Flat calibration mode
 
@@ -223,6 +225,8 @@ function hourAngleDeg(h: number) {
 ### Physical model (user’s own description)
 
 > “Physically, it is literally a prism. Like a long triangle. It’s a prism with the outermost facet ground a bit, so it’s angled, and we get a yellow triangle. And another part of the prism, it is sharpened into an arrow. And then again polished down … because we made it narrow, it doesn’t become a triangle like a yellow facet, but it becomes a diamond shape.”
+
+Corrected against macro photography (August 2026): the cross-section is **not** a bare triangle — it is a triangular prism standing on a vertical-walled base slab, with a polished vertical band running around the entire footprint. The inner diamond facet is **one flat plane, never folded at the tip**: a single grind plane through both roof-eave corners and the inner ridge end. Its pointed tip terminates **above the dial** on a vertical tip wall — the bright facet sits on dark slab material and never dives to the base. Heights: `MARKER_PRISM_HEIGHT = 16` (total, ⅓ of the 48px width), `MARKER_BASE_HEIGHT = 11.2` (eaves/side band — base:rise ≈ 2.3:1, solved from a raking macro's band structure: far roof ≈ 9, near roof ≈ 18, base ≈ 10.5 image px at ≈37° elevation). With the 90° square diamond the facet tip height is `2 × base − ridge = 6.4px`, floating above the dial. Base ≥ ridge/2 is the validity limit — thinner bands require lowering the ridge with them. The `Watch3D` mesh (`batonGeometry`) implements exactly this solid; its plan-view projection stays identical to the calibrated flat artwork.
 
 ---
 
@@ -444,10 +448,11 @@ src/components/WeeklyCalendarWatch.tsx
 ├── ControlPanel (draggable tabbed control window: Time / Layers / Light)
 ├── DayIndicatorHand / WeekIndicatorHand
 ├── HourHand / MinuteHand / SecondsHand
-└── WeeklyCalendarWatch (clock state, photo, SVG layers, guides, and tab content)
+├── WeeklyCalendarWatch (clock state, photo, SVG layers, guides, and tab content)
+└── WATCH_GEOMETRY (calibrated constants re-exported for the 3D viewer)
 ```
 
-Everything geometric lives in one file so the constants stay co-located with the drawing code. Do not scatter the radii into a separate config until the dial is finished.
+Everything geometric lives in one file so the constants stay co-located with the drawing code. Do not scatter the radii into a separate config until the dial is finished. `src/components/Watch3D.tsx` consumes `WATCH_GEOMETRY` to build the rotatable three.js model (scene units are photo pixels; watch space maps photo `(x, y)` to `(x − CX, CY − y)` with +Z off the dial); it must not duplicate constants.
 
 ---
 

@@ -84,10 +84,20 @@ const WEEK_OFFSET_DEG = 6.5;
 /** Hour baton geometry (photo px). */
 const R_BATON_OUT = 799;
 const R_BATON_IN = 616;
-const R_BATON_IN_APEX = 647;
-const R_BATON_IN_APEX_MIRROR = 588;
+/**
+ * Diamond radii re-measured from perpendicular macro photography (Aug 2026),
+ * re-opening the earlier 647/588 estimates: the real facet is a perfect
+ * square rotated 45° — the pointy arrow corner is exactly 90°, so tip and
+ * ridge-end each sit one half-width (24px) from the side-corner line.
+ */
+const R_BATON_IN_APEX = 640;
+const R_BATON_IN_APEX_MIRROR = 592;
 const BATON_HALF_W = 24;
-const BATON_OUTER_END_DEPTH = 27.5;
+/**
+ * Outer ground facet: a right-angle isosceles triangle — exactly half of the
+ * 48×48 diamond square, so its apex matches the arrow's 90° point (Aug 2026).
+ */
+const BATON_OUTER_END_DEPTH = 24;
 const BATON_12_LATERAL = 30;
 
 /** Seconds-hand geometry measured from the orthographic reference. */
@@ -763,7 +773,16 @@ function annularSectorPath(
 
 type MarkerMode = "flat" | "3d";
 
-const MARKER_PRISM_HEIGHT = 34;
+/**
+ * Marker heights tuned against macro photography (Aug 2026): a low ridge on
+ * a vertical-walled base slab. The flat diamond grind plane runs from the
+ * eaves to the inner ridge end; with the 90° square diamond its tip height
+ * is `2 × base − ridge` (= 4px here), floating above the dial on a vertical
+ * tip wall — the facet never reaches the base.
+ */
+const MARKER_PRISM_HEIGHT = 16;
+/** Base:rise ≈ 2.3:1, solved from the raking macro's band structure. */
+const MARKER_BASE_HEIGHT = 11.2;
 const LIGHT_HEMISPHERE_RADIUS = R_DIAL_EDGE * 6;
 
 function markerWorldPoint(point: Vec3, angle: number, lateralOffset: number): Vec3 {
@@ -3166,3 +3185,86 @@ export function WeeklyCalendarWatch({ className = "", screensaver = false }: Pro
     </div>
   );
 }
+
+/**
+ * Calibrated geometry and timing constants shared with the 3D viewer
+ * (`Watch3D`). Values stay declared above, co-located with the SVG drawing
+ * code, per docs/PROCESS.md §13.
+ */
+export const WATCH_GEOMETRY = {
+  IMG_W,
+  IMG_H,
+  CX,
+  CY,
+  R_DIAL_EDGE,
+  R_DAY_IN,
+  R_DAY_OUT,
+  R_MINUTE,
+  MINUTE_OFFSET_DEG,
+  MINUTE_STEP_DEG,
+  MINUTE_DOT_RADIUS,
+  MINUTE_SKIP,
+  R_WEEK_IN,
+  R_WEEK_OUT,
+  R_WEEK_DOT,
+  WEEK_DOT_RADIUS,
+  MONTH_SECTOR_OFFSET_DEG,
+  DIAL_STROKE_WIDTH,
+  DATE_RING_DEFAULT_RADIUS,
+  DATE_RING_OFFSET_X,
+  DATE_RING_OFFSET_Y,
+  DATE_WHEEL_UNWRAPPED_ANGLES,
+  DATE_WINDOW_CLIP_LEFT,
+  DATE_WINDOW_CLIP_TOP,
+  DATE_WINDOW_CLIP_RIGHT,
+  DATE_WINDOW_CLIP_BOTTOM,
+  R_BATON_OUT,
+  R_BATON_IN,
+  R_BATON_IN_APEX,
+  R_BATON_IN_APEX_MIRROR,
+  BATON_HALF_W,
+  BATON_OUTER_END_DEPTH,
+  BATON_12_LATERAL,
+  MARKER_PRISM_HEIGHT,
+  MARKER_BASE_HEIGHT,
+  SINGLE_BATON_HOURS,
+  hourAngleDeg,
+  WEEK_COUNT,
+  WEEK_OFFSET_DEG,
+  WEEK_STEP_DEG,
+  DAY_SECTOR_OFFSET_DEG,
+  DAY_SECTOR_STEP_DEG,
+  HOUR_HAND_TIP_RADIUS,
+  HOUR_HAND_REAR_RADIUS,
+  HOUR_HAND_BASE_RADIUS,
+  HOUR_HAND_HALF_WIDTH,
+  HOUR_HAND_TIP_HALF_WIDTH,
+  HOUR_HAND_PRISM_HEIGHT,
+  MINUTE_HAND_TIP_RADIUS,
+  MINUTE_HAND_REAR_RADIUS,
+  MINUTE_HAND_BASE_RADIUS,
+  MINUTE_HAND_HALF_WIDTH,
+  MINUTE_HAND_PRISM_HEIGHT,
+  WEEK_HAND_HEAD_RADIUS,
+  WEEK_HAND_SHAFT_START_RADIUS,
+  WEEK_HAND_SHAFT_HALF_WIDTH,
+  WEEK_HAND_HEAD_HALF_LENGTH,
+  WEEK_HAND_HEAD_HALF_THICKNESS,
+  DAY_HAND_HEAD_RADIUS,
+  DAY_HAND_SHAFT_START_RADIUS,
+  DAY_HAND_SHAFT_HALF_WIDTH,
+  DAY_HAND_HEAD_HALF_LENGTH,
+  DAY_HAND_HEAD_HALF_THICKNESS,
+  SECOND_HAND_TIP_Y,
+  SECOND_HAND_NECK_Y,
+  SECOND_HAND_TIP_HALF_W,
+  SECOND_HAND_NECK_HALF_W,
+  SECOND_HAND_HUB_RADIUS,
+  SECOND_HAND_TAIL_SHOULDER_Y,
+  SECOND_HAND_TAIL_END_Y,
+  SECOND_HAND_TAIL_POINT_Y,
+  SECOND_HAND_TAIL_SHOULDER_HALF_W,
+  SECOND_HAND_TAIL_END_HALF_W,
+  SECOND_HAND_TICK_MS,
+  SECOND_HAND_DEGREES_PER_TICK,
+} as const;
