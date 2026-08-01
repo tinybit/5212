@@ -1,7 +1,7 @@
 import { r as __toESM } from "../_runtime.mjs";
 import { M as require_react, h as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
 import { S as TextureLoader, _ as MeshStandardMaterial, a as BufferGeometry, b as Scene, c as Color, d as ExtrudeGeometry, f as Float32BufferAttribute, g as MeshPhysicalMaterial, h as MeshBasicMaterial, i as WebGLRenderer, l as CylinderGeometry, m as Mesh, n as TrackballControls, o as CanvasTexture, p as Group, r as PMREMGenerator, s as CircleGeometry, t as RoomEnvironment, u as DirectionalLight, v as PerspectiveCamera, x as Shape, y as SRGBColorSpace } from "../_libs/three.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-CHExS9M5.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-2HAEVF2L.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function isoWeekCoordinates(date) {
@@ -3703,6 +3703,63 @@ function dateWindowWallGeometry() {
 	]);
 }
 /**
+* The photograph bakes in a soft shadow ring where the case bezel meets the
+* dial (r ≈ 1010–1024), and the hand-removal inpainting flattened it in
+* patches — so once the bezel itself is painted over, the leftover shadow
+* reads as a broken gray arc under close-up. Replace that shadowed cream with
+* clean dial cream, pixel by pixel, protecting printed month letters and
+* their antialiased edges (measured: no pure-shadow pixel has max(RGB) < 150
+* unless it touches real ink).
+*/
+function cleanBezelShadow(ctx) {
+	const R_INNER = 998;
+	const R_SOLID = 1010;
+	const R_OUTER = WATCH_GEOMETRY.R_DIAL_EDGE + 8;
+	const INK_MAX = 150;
+	const PROTECT = 2;
+	const CREAM = [
+		238,
+		232,
+		224
+	];
+	const size = (Math.ceil(R_OUTER) + PROTECT + 1) * 2;
+	const x0 = Math.round(WATCH_GEOMETRY.CX) - size / 2;
+	const y0 = Math.round(WATCH_GEOMETRY.CY) - size / 2;
+	const image = ctx.getImageData(x0, y0, size, size);
+	const data = image.data;
+	const ink = new Uint8Array(size * size);
+	for (let i = 0; i < ink.length; i++) {
+		const p = i * 4;
+		if (Math.max(data[p], data[p + 1], data[p + 2]) < INK_MAX) ink[i] = 1;
+	}
+	for (let y = 0; y < size; y++) {
+		const dy = y0 + y + .5 - WATCH_GEOMETRY.CY;
+		for (let x = 0; x < size; x++) {
+			const dx = x0 + x + .5 - WATCH_GEOMETRY.CX;
+			const r = Math.hypot(dx, dy);
+			if (r < R_INNER || r > R_OUTER) continue;
+			const idx = y * size + x;
+			if (ink[idx]) continue;
+			let nearInk = false;
+			for (let oy = -2; oy <= PROTECT && !nearInk; oy++) {
+				const row = (y + oy) * size + x;
+				for (let ox = -2; ox <= PROTECT; ox++) if (ink[row + ox]) {
+					nearInk = true;
+					break;
+				}
+			}
+			if (nearInk) continue;
+			const p = idx * 4;
+			if (data[p + 3] < 200) continue;
+			const t = r >= R_SOLID ? 1 : (r - R_INNER) / (R_SOLID - R_INNER);
+			data[p] += (CREAM[0] - data[p]) * t;
+			data[p + 1] += (CREAM[1] - data[p + 1]) * t;
+			data[p + 2] += (CREAM[2] - data[p + 2]) * t;
+		}
+	}
+	ctx.putImageData(image, x0, y0);
+}
+/**
 * Draw the calibrated dial linework (the 2D view's "Drawing" layer) into the
 * dial texture: rails, sector lines, week dots, and minute markers. Without
 * this, the 3D dial only shows the photo's faint printed lines.
@@ -3783,6 +3840,13 @@ var ELEMENT_OPTIONS = [
 		label: "Second"
 	}
 ];
+var HAND_KEYS = [
+	"week",
+	"day",
+	"hour",
+	"minute",
+	"second"
+];
 var LIGHT_DISTANCE = 5100;
 function toggleButtonClass(active) {
 	return `rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${active ? "border-black bg-black text-white hover:bg-zinc-800" : "border-black/25 bg-white text-black hover:bg-zinc-100"}`;
@@ -3854,6 +3918,12 @@ function Watch3D({ className = "" }) {
 			let composed;
 			if (ctx) {
 				ctx.drawImage(photo.image, 0, 0);
+				cleanBezelShadow(ctx);
+				ctx.fillStyle = "#eee8e0";
+				ctx.beginPath();
+				ctx.rect(0, 0, canvas.width, canvas.height);
+				ctx.arc(WATCH_GEOMETRY.CX, WATCH_GEOMETRY.CY, WATCH_GEOMETRY.R_DIAL_EDGE + 6, 0, Math.PI * 2, true);
+				ctx.fill();
 				drawDialLinework(ctx);
 				composed = new CanvasTexture(canvas);
 				photo.dispose();
@@ -3902,7 +3972,7 @@ function Watch3D({ className = "" }) {
 		});
 		const watch = new Group();
 		scene.add(watch);
-		const dialGeometry = new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, 160);
+		const dialGeometry = new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, 160);
 		{
 			const positions = dialGeometry.attributes.position;
 			const uvs = dialGeometry.attributes.uv;
@@ -3922,7 +3992,7 @@ function Watch3D({ className = "" }) {
 		dateWheel.position.set(WATCH_GEOMETRY.DATE_RING_OFFSET_X * DATE_WHEEL_OFFSET_SCALE, -WATCH_GEOMETRY.DATE_RING_OFFSET_Y * DATE_WHEEL_OFFSET_SCALE, STACK.dateWheel);
 		watch.add(dateWheel);
 		watch.add(new Mesh(dateWindowWallGeometry(), wallMaterial));
-		const movementBackdrop = new Mesh(new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, 96), new MeshStandardMaterial({
+		const movementBackdrop = new Mesh(new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, 96), new MeshStandardMaterial({
 			color: 1447188,
 			roughness: .85,
 			side: 2
@@ -4011,7 +4081,7 @@ function Watch3D({ className = "" }) {
 		secondsHand.add(pin);
 		secondsHand.position.z = STACK.secondsHand;
 		watch.add(secondsHand);
-		const rim = new Mesh(new CylinderGeometry(WATCH_GEOMETRY.R_DIAL_EDGE, WATCH_GEOMETRY.R_DIAL_EDGE, -STACK.movementBackdrop, 128, 1, true), new MeshStandardMaterial({
+		const rim = new Mesh(new CylinderGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, WATCH_GEOMETRY.R_DIAL_EDGE + 10, -STACK.movementBackdrop, 128, 1, true), new MeshStandardMaterial({
 			color: 1776153,
 			roughness: .7,
 			side: 2
@@ -4167,9 +4237,9 @@ function Watch3D({ className = "" }) {
 						className: "mb-1 text-[10px] font-bold",
 						children: "Elements"
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "grid grid-cols-2 gap-1",
-						children: ELEMENT_OPTIONS.map(({ key, label }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						children: [ELEMENT_OPTIONS.map(({ key, label }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 							type: "button",
 							"aria-pressed": visibility[key],
 							onClick: () => setVisibility((current) => ({
@@ -4178,7 +4248,18 @@ function Watch3D({ className = "" }) {
 							})),
 							className: toggleButtonClass(visibility[key]),
 							children: label
-						}, key))
+						}, key)), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							"aria-pressed": HAND_KEYS.every((key) => visibility[key]),
+							onClick: () => setVisibility((current) => {
+								const show = !HAND_KEYS.every((key) => current[key]);
+								const next = { ...current };
+								for (const key of HAND_KEYS) next[key] = show;
+								return next;
+							}),
+							className: toggleButtonClass(HAND_KEYS.every((key) => visibility[key])),
+							children: "All hands"
+						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 						className: "mb-1 mt-3 border-t border-black/15 pt-2 text-[10px] font-bold",
@@ -4230,10 +4311,10 @@ function WatchStage({ screensaver = false }) {
 		children: [!screensaver && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 			type: "button",
 			"aria-pressed": view === "3d",
-			title: view === "dial" ? "Rotate the watch in 3D" : "Return to the calibrated dial view",
+			title: view === "dial" ? "Switch to the 3D view" : "Switch to the 2D view",
 			onClick: () => setView((current) => current === "dial" ? "3d" : "dial"),
 			className: "fixed right-3 top-3 z-40 rounded-lg border-2 border-white/40 bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg transition hover:bg-zinc-100 active:scale-95",
-			children: view === "dial" ? "3D" : "Dial"
+			children: view === "dial" ? "3D" : "2D"
 		}), view === "dial" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WeeklyCalendarWatch, {
 			screensaver,
 			className: screensaver ? "h-auto w-[min(94vw,94vh)] max-w-none" : "h-auto w-full max-w-[min(96vw,720px)]"

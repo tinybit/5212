@@ -201,6 +201,65 @@ function dateWindowWallGeometry() {
 }
 
 /**
+ * The photograph bakes in a soft shadow ring where the case bezel meets the
+ * dial (r ≈ 1010–1024), and the hand-removal inpainting flattened it in
+ * patches — so once the bezel itself is painted over, the leftover shadow
+ * reads as a broken gray arc under close-up. Replace that shadowed cream with
+ * clean dial cream, pixel by pixel, protecting printed month letters and
+ * their antialiased edges (measured: no pure-shadow pixel has max(RGB) < 150
+ * unless it touches real ink).
+ */
+function cleanBezelShadow(ctx: CanvasRenderingContext2D) {
+  const R_INNER = 998; // feather start: untouched inside this radius
+  const R_SOLID = 1010; // fully replaced from here outward
+  const R_OUTER = G.R_DIAL_EDGE + 8; // meets the flat bezel cover
+  const INK_MAX = 150; // darker than this = printed ink (or its halo)
+  const PROTECT = 2; // px halo kept around ink so letter antialiasing survives
+  const CREAM = [238, 232, 224]; // #eee8e0, same as the bezel cover fill
+
+  const size = (Math.ceil(R_OUTER) + PROTECT + 1) * 2;
+  const x0 = Math.round(G.CX) - size / 2;
+  const y0 = Math.round(G.CY) - size / 2;
+  const image = ctx.getImageData(x0, y0, size, size);
+  const data = image.data;
+
+  const ink = new Uint8Array(size * size);
+  for (let i = 0; i < ink.length; i++) {
+    const p = i * 4;
+    if (Math.max(data[p], data[p + 1], data[p + 2]) < INK_MAX) ink[i] = 1;
+  }
+
+  for (let y = 0; y < size; y++) {
+    const dy = y0 + y + 0.5 - G.CY;
+    for (let x = 0; x < size; x++) {
+      const dx = x0 + x + 0.5 - G.CX;
+      const r = Math.hypot(dx, dy);
+      if (r < R_INNER || r > R_OUTER) continue;
+      const idx = y * size + x;
+      if (ink[idx]) continue;
+      let nearInk = false;
+      for (let oy = -PROTECT; oy <= PROTECT && !nearInk; oy++) {
+        const row = (y + oy) * size + x;
+        for (let ox = -PROTECT; ox <= PROTECT; ox++) {
+          if (ink[row + ox]) {
+            nearInk = true;
+            break;
+          }
+        }
+      }
+      if (nearInk) continue;
+      const p = idx * 4;
+      if (data[p + 3] < 200) continue;
+      const t = r >= R_SOLID ? 1 : (r - R_INNER) / (R_SOLID - R_INNER);
+      data[p] += (CREAM[0] - data[p]) * t;
+      data[p + 1] += (CREAM[1] - data[p + 1]) * t;
+      data[p + 2] += (CREAM[2] - data[p + 2]) * t;
+    }
+  }
+  ctx.putImageData(image, x0, y0);
+}
+
+/**
  * Draw the calibrated dial linework (the 2D view's "Drawing" layer) into the
  * dial texture: rails, sector lines, week dots, and minute markers. Without
  * this, the 3D dial only shows the photo's faint printed lines.
@@ -388,6 +447,18 @@ export function Watch3D({ className = "" }: Props) {
         let composed: THREE.Texture;
         if (ctx) {
           ctx.drawImage(photo.image as CanvasImageSource, 0, 0);
+          // Erase the photo's baked-in bezel shadow just inside the dial edge
+          // (patchy after hand inpainting, so it shows as a broken gray arc).
+          cleanBezelShadow(ctx);
+          // Cover the photographed case bezel with clean dial cream: its gray
+          // starts ~13px outside the dial edge and bleeds inward as a gray
+          // rim arc under mipmapped sampling. 1036 clears the 9px edge ring
+          // stroke (ends at 1034.5); the nearest print is far inside.
+          ctx.fillStyle = "#eee8e0";
+          ctx.beginPath();
+          ctx.rect(0, 0, canvas.width, canvas.height);
+          ctx.arc(G.CX, G.CY, G.R_DIAL_EDGE + 6, 0, Math.PI * 2, true);
+          ctx.fill();
           drawDialLinework(ctx);
           composed = new THREE.CanvasTexture(canvas);
           photo.dispose();
@@ -443,8 +514,10 @@ export function Watch3D({ className = "" }: Props) {
     scene.add(watch);
 
     // Dial face with the calibrated dial-only photo; the date aperture is
-    // transparent in the texture, so alphaTest punches a real hole.
-    const dialGeometry = new THREE.CircleGeometry(G.R_DIAL_EDGE, 160);
+    // transparent in the texture, so alphaTest punches a real hole. The disc
+    // extends slightly past the printed edge ring so the ring renders whole
+    // (not cut at the silhouette) with clean cream on both sides.
+    const dialGeometry = new THREE.CircleGeometry(G.R_DIAL_EDGE + 10, 160);
     {
       const positions = dialGeometry.attributes.position;
       const uvs = dialGeometry.attributes.uv;
@@ -477,7 +550,7 @@ export function Watch3D({ className = "" }: Props) {
     watch.add(new THREE.Mesh(dateWindowWallGeometry(), wallMaterial));
 
     const movementBackdrop = new THREE.Mesh(
-      new THREE.CircleGeometry(G.R_DIAL_EDGE, 96),
+      new THREE.CircleGeometry(G.R_DIAL_EDGE + 10, 96),
       new THREE.MeshStandardMaterial({
         color: 0x161514,
         roughness: 0.85,
@@ -627,8 +700,8 @@ export function Watch3D({ className = "" }: Props) {
     // so the caseless watch reads as a solid object from the side and back.
     const rim = new THREE.Mesh(
       new THREE.CylinderGeometry(
-        G.R_DIAL_EDGE,
-        G.R_DIAL_EDGE,
+        G.R_DIAL_EDGE + 10,
+        G.R_DIAL_EDGE + 10,
         -STACK.movementBackdrop,
         128,
         1,
