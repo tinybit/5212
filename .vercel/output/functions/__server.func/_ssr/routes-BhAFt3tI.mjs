@@ -1,7 +1,7 @@
 import { r as __toESM } from "../_runtime.mjs";
 import { M as require_react, h as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { S as TextureLoader, _ as MeshStandardMaterial, a as BufferGeometry, b as Scene, c as Color, d as ExtrudeGeometry, f as Float32BufferAttribute, g as MeshPhysicalMaterial, h as MeshBasicMaterial, i as WebGLRenderer, l as CylinderGeometry, m as Mesh, n as TrackballControls, o as CanvasTexture, p as Group, r as PMREMGenerator, s as CircleGeometry, t as RoomEnvironment, u as DirectionalLight, v as PerspectiveCamera, x as Shape, y as SRGBColorSpace } from "../_libs/three.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-2HAEVF2L.js
+import { A as Vector3, C as PerspectiveCamera, D as Scene, E as SRGBColorSpace, O as Shape, S as MeshStandardMaterial, T as RingGeometry, _ as LineBasicMaterial, a as BoxGeometry, b as MeshBasicMaterial, c as CircleGeometry, d as DirectionalLight, f as EdgesGeometry, g as Line, h as Group, i as ArrowHelper, k as TextureLoader, l as Color, m as Float32BufferAttribute, n as PMREMGenerator, o as BufferGeometry, p as ExtrudeGeometry, r as WebGLRenderer, s as CanvasTexture, t as TrackballControls, u as CylinderGeometry, v as LineSegments, w as PlaneGeometry, x as MeshPhysicalMaterial, y as Mesh } from "../_libs/three.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BhAFt3tI.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function isoWeekCoordinates(date) {
@@ -3330,8 +3330,8 @@ var DEG = Math.PI / 180;
 */
 /** Vertical stack (photo px above the dial face). */
 var STACK = {
-	dateWheel: -12,
-	movementBackdrop: -18,
+	dateWheel: -75,
+	movementBackdrop: -85,
 	dayHand: 6,
 	weekHand: 13,
 	hourHand: 20,
@@ -3339,10 +3339,120 @@ var STACK = {
 	secondsHand: 52
 };
 /**
+* Dial plate thickness: the aperture walls run this deep; below them the
+* recess opens into the air gap above the date wheel. Real proportion
+* measured from macro photography: the visible cut edge is ~5-8% of the
+* window width.
+*/
+var DIAL_THICKNESS = 27;
+/** Corner radius of the date aperture (~8-10% of window width, per macro). */
+var DATE_WINDOW_CORNER_RADIUS = 14;
+var STUDIO_AZIMUTH = 130;
+var DEFAULT_AZIMUTH = 148;
+var DEFAULT_ELEVATION = 60;
+var DEFAULT_LIGHT_INTENSITY = 2.55;
+var DEFAULT_AMBIENT_INTENSITY = .75;
+/**
+* Angular footprint of the key softbox, sampled as a light cluster: one ray
+* through the panel center plus a ring across its extent. Half-angle ~12°
+* matches the penumbra measured on the reference photo's date window
+* (gradient runs ~half the shadow band over a 34-unit recess depth).
+*/
+var AREA_LIGHT_SPREAD_DEG = 12;
+var AREA_LIGHT_OFFSETS = [
+	[0, 0],
+	[1, 0],
+	[-1, 0],
+	[0, 1],
+	[0, -1],
+	[.7, .7],
+	[-.7, -.7]
+];
+/** Aim the key cluster: each light offset in azimuth/elevation degrees. */
+function positionKeyLights(lights, azimuthDeg, elevationDeg, spreadDeg = AREA_LIGHT_SPREAD_DEG, distance = LIGHT_DISTANCE) {
+	for (let i = 0; i < lights.length; i++) {
+		const [offsetAz, offsetEl] = AREA_LIGHT_OFFSETS[i];
+		const azimuth = (azimuthDeg + offsetAz * spreadDeg) * DEG;
+		const elevation = (elevationDeg + offsetEl * spreadDeg) * DEG;
+		lights[i].position.set(Math.cos(azimuth) * Math.cos(elevation) * distance, Math.sin(azimuth) * Math.cos(elevation) * distance, Math.sin(elevation) * distance);
+	}
+}
+function positionLightSourceVisual(panel, arrow, azimuthDeg, elevationDeg, halfAngleDeg, distance) {
+	const azimuth = azimuthDeg * DEG;
+	const elevation = elevationDeg * DEG;
+	const direction = new Vector3(Math.cos(azimuth) * Math.cos(elevation), Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation)).normalize();
+	const position = direction.clone().multiplyScalar(distance);
+	const fullSize = 2 * distance * Math.tan(halfAngleDeg * DEG) * 1.35;
+	panel.position.copy(position);
+	panel.lookAt(0, 0, 0);
+	panel.scale.set(fullSize, fullSize, 1);
+	arrow.setDirection(direction);
+	arrow.setLength(distance, 180, 90);
+}
+/**
+* Product-photography light box, PMREM-prefiltered as the scene environment.
+* A dark neutral room gives polished black metal deep darks; the panels are
+* authored like a photographer's rig around the default key direction:
+* a large key softbox up-left-front, a dim fill opposite, a long overhead
+* strip for the sweeping bezel highlight, and a weak floor bounce. Colors
+* above 1.0 are HDR radiance for the half-float PMREM capture.
+*/
+function buildStudioEnvironment() {
+	const scene = new Scene();
+	const geometries = [];
+	const room = new Mesh(new BoxGeometry(20, 20, 20), new MeshBasicMaterial({
+		color: 1053204,
+		side: 1
+	}));
+	scene.add(room);
+	const panel = (width, height, radiance, position) => {
+		const geometry = new PlaneGeometry(width, height);
+		geometries.push(geometry);
+		const mesh = new Mesh(geometry, new MeshBasicMaterial({
+			color: new Color(radiance, radiance, radiance),
+			side: 2
+		}));
+		mesh.position.set(...position);
+		mesh.lookAt(0, 0, 0);
+		scene.add(mesh);
+		return mesh;
+	};
+	panel(7, 5, 4, [
+		-4.5,
+		5.5,
+		6
+	]);
+	panel(9.5, 7, 1.5, [
+		-4.9,
+		6,
+		6.5
+	]);
+	panel(6, 4.5, 1.2, [
+		6.5,
+		-1.5,
+		5.5
+	]);
+	panel(16, 1.6, 4, [
+		.5,
+		8.5,
+		1.5
+	]);
+	panel(12, 8, .5, [
+		0,
+		-8.5,
+		2
+	]);
+	return scene;
+}
+/**
 * The 2D simulator calibrated the date-ring center offset in rendered CSS
 * pixels at the 720px layout width; convert to photo pixels for the scene.
 */
 var DATE_WHEEL_OFFSET_SCALE = WATCH_GEOMETRY.IMG_W / 720;
+var DATE_RING_TEXTURE_RADIUS = 1150;
+var DATE_RING_TEXTURE_MARGIN = 77;
+var DATE_WHEEL_RADIUS_SCALE = 1227 / DATE_RING_TEXTURE_RADIUS;
+var DATE_WHEEL_OUTER_RADIUS = WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS * DATE_WHEEL_RADIUS_SCALE;
 var FLAT_HAND_DEPTH = 4;
 /** Triangle-fan mesh from a list of flat convex polygons (hand space). */
 function polygonGeometry(polygons) {
@@ -3604,103 +3714,199 @@ function hammerHeadGeometry(headRadius, halfLength, halfThickness, depth) {
 		curveSegments: 24
 	});
 }
-/** Aperture walls connecting the dial cutout down to the date wheel. */
-function dateWindowWallGeometry() {
+/**
+* Rounded-rect outline of the date aperture in watch coords (y up), traced
+* clockwise when seen from the front. Shared contract with the texture punch
+* in `punchDateWindow` so walls and hole coincide exactly.
+*/
+function dateWindowOutline(cornerDivisions = 16) {
 	const left = WATCH_GEOMETRY.DATE_WINDOW_CLIP_LEFT - WATCH_GEOMETRY.CX;
 	const right = WATCH_GEOMETRY.DATE_WINDOW_CLIP_RIGHT - WATCH_GEOMETRY.CX;
 	const top = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_TOP;
 	const bottom = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_BOTTOM;
-	const depth = STACK.dateWheel;
-	return polygonGeometry([
-		[
-			[
-				left,
-				top,
-				0
-			],
-			[
-				right,
-				top,
-				0
-			],
-			[
-				right,
-				top,
-				depth
-			],
-			[
-				left,
-				top,
-				depth
-			]
-		],
-		[
-			[
-				right,
-				top,
-				0
-			],
-			[
-				right,
-				bottom,
-				0
-			],
-			[
-				right,
-				bottom,
-				depth
-			],
-			[
-				right,
-				top,
-				depth
-			]
-		],
-		[
-			[
-				right,
-				bottom,
-				0
-			],
-			[
-				left,
-				bottom,
-				0
-			],
-			[
-				left,
-				bottom,
-				depth
-			],
-			[
-				right,
-				bottom,
-				depth
-			]
-		],
-		[
-			[
-				left,
-				bottom,
-				0
-			],
-			[
-				left,
-				top,
-				0
-			],
-			[
-				left,
-				top,
-				depth
-			],
-			[
-				left,
-				bottom,
-				depth
-			]
-		]
-	]);
+	const r = DATE_WINDOW_CORNER_RADIUS;
+	const shape = new Shape();
+	shape.moveTo(left + r, bottom);
+	shape.lineTo(right - r, bottom);
+	shape.absarc(right - r, bottom + r, r, -Math.PI / 2, 0, false);
+	shape.lineTo(right, top - r);
+	shape.absarc(right - r, top - r, r, 0, Math.PI / 2, false);
+	shape.lineTo(left + r, top);
+	shape.absarc(left + r, top - r, r, Math.PI / 2, Math.PI, false);
+	shape.lineTo(left, bottom + r);
+	shape.absarc(left + r, bottom + r, r, Math.PI, Math.PI * 1.5, false);
+	shape.closePath();
+	return shape.getPoints(cornerDivisions);
+}
+/** Default angular half-size of the square key emitter (a big softbox). */
+var EMITTER_HALF_ANGLE_DEG = 19;
+/**
+* Full photon-computed shading for the date recess. For every point on the
+* wheel plane near the aperture, two integrals:
+*
+* 1. Key term — a SQUARE area emitter around the key direction: a grid of
+*    rays across the emitter's angular extent, each tested against the
+*    rounded-rect opening (at both the dial face and the plate bottom).
+*    Exact area-light shadow: continuous penumbra, no sampling bands.
+* 2. Ambient term — cosine-weighted view factor of the opening (the share
+*    of diffuse sky the point sees), so corners where no photons reach stay
+*    genuinely dark and the falloff never plateaus.
+*
+* The sum is normalized into an 8-bit map (returned scale restores absolute
+* brightness via lightMapIntensity). The wheel renders UNLIT with this map
+* as its entire illumination — scene lights and shadow maps never touch it.
+* Re-baked when the light rig changes; counter-rotated per frame so the
+* shading stays pinned to the aperture while the disc turns beneath it.
+*/
+function bakeDateWheelShading(canvas, azimuthDeg, elevationDeg, keyTerm, ambientTerm, emitterHalfAngleDeg = EMITTER_HALF_ANGLE_DEG, dialThickness = DIAL_THICKNESS, dateWheelDepth = -STACK.dateWheel) {
+	const SIZE = canvas.width;
+	const radius = WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS;
+	const wheelCenterX = WATCH_GEOMETRY.DATE_RING_OFFSET_X * DATE_WHEEL_OFFSET_SCALE;
+	const wheelCenterY = -WATCH_GEOMETRY.DATE_RING_OFFSET_Y * DATE_WHEEL_OFFSET_SCALE;
+	const left = WATCH_GEOMETRY.DATE_WINDOW_CLIP_LEFT - WATCH_GEOMETRY.CX;
+	const right = WATCH_GEOMETRY.DATE_WINDOW_CLIP_RIGHT - WATCH_GEOMETRY.CX;
+	const top = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_TOP;
+	const bottom = WATCH_GEOMETRY.CY - WATCH_GEOMETRY.DATE_WINDOW_CLIP_BOTTOM;
+	const corner = DATE_WINDOW_CORNER_RADIUS;
+	const depth = dateWheelDepth;
+	const margin = 120;
+	const insideAperture = (x, y) => {
+		if (x < left || x > right || y < bottom || y > top) return false;
+		const dx = Math.max(0, Math.max(left + corner - x, x - (right - corner)));
+		const dy = Math.max(0, Math.max(bottom + corner - y, y - (top - corner)));
+		return dx * dx + dy * dy <= corner * corner;
+	};
+	const plastic = 1.324717957244746;
+	const r2x = 1 / plastic;
+	const r2y = 1 / (plastic * plastic);
+	const fract = (value) => value - Math.floor(value);
+	const azimuth = azimuthDeg * DEG;
+	const elevation = elevationDeg * DEG;
+	const d = new Vector3(Math.cos(azimuth) * Math.cos(elevation), Math.sin(azimuth) * Math.cos(elevation), Math.sin(elevation));
+	const u = new Vector3().crossVectors(d, new Vector3(0, 0, 1)).normalize();
+	const v = new Vector3().crossVectors(u, d).normalize();
+	const spread = Math.tan(emitterHalfAngleDeg * DEG) * 1.35;
+	const EMITTER_SAMPLES = 4096;
+	const faceOffsetX = new Float64Array(EMITTER_SAMPLES);
+	const faceOffsetY = new Float64Array(EMITTER_SAMPLES);
+	const plateOffsetX = new Float64Array(EMITTER_SAMPLES);
+	const plateOffsetY = new Float64Array(EMITTER_SAMPLES);
+	const weights = new Float64Array(EMITTER_SAMPLES);
+	let unoccluded = 0;
+	const sample = new Vector3();
+	for (let i = 0; i < EMITTER_SAMPLES; i++) {
+		const a = (fract(.5 + (i + 1) * r2x) - .5) * 2;
+		const b = (fract(.5 + (i + 1) * r2y) - .5) * 2;
+		const window = (.5 + .5 * Math.cos(a * Math.PI)) * (.5 + .5 * Math.cos(b * Math.PI));
+		sample.copy(d).addScaledVector(u, a * spread).addScaledVector(v, b * spread).normalize();
+		if (sample.z <= .02) continue;
+		const tFace = depth / sample.z;
+		const tPlate = (depth - dialThickness) / sample.z;
+		faceOffsetX[i] = tFace * sample.x;
+		faceOffsetY[i] = tFace * sample.y;
+		plateOffsetX[i] = tPlate * sample.x;
+		plateOffsetY[i] = tPlate * sample.y;
+		weights[i] = window * sample.z;
+		unoccluded += weights[i];
+	}
+	const keyFraction = (px, py) => {
+		let sum = 0;
+		for (let i = 0; i < EMITTER_SAMPLES; i++) if (weights[i] > 0 && insideAperture(px + faceOffsetX[i], py + faceOffsetY[i]) && insideAperture(px + plateOffsetX[i], py + plateOffsetY[i])) sum += weights[i];
+		return sum / unoccluded;
+	};
+	const APERTURE_SAMPLES = 2048;
+	const apertureSamples = [];
+	for (let i = 0; apertureSamples.length < APERTURE_SAMPLES; i++) {
+		const ax = left + fract(.173 + (i + 1) * r2x) * (right - left);
+		const ay = bottom + fract(.619 + (i + 1) * r2y) * (top - bottom);
+		if (insideAperture(ax, ay)) apertureSamples.push([ax, ay]);
+	}
+	const sampleArea = ((right - left) * (top - bottom) - (4 - Math.PI) * corner * corner) / APERTURE_SAMPLES;
+	const viewFactor = (px, py) => {
+		let sum = 0;
+		for (const [ax, ay] of apertureSamples) {
+			const rx = ax - px;
+			const ry = ay - py;
+			const r2 = rx * rx + ry * ry + depth * depth;
+			sum += depth * depth / (Math.PI * r2 * r2);
+		}
+		return sum * sampleArea;
+	};
+	const centerVF = viewFactor((left + right) / 2, (top + bottom) / 2);
+	const scale = keyTerm + ambientTerm;
+	const ctx = canvas.getContext("2d");
+	ctx.fillStyle = "rgb(0,0,0)";
+	ctx.fillRect(0, 0, SIZE, SIZE);
+	const image = ctx.getImageData(0, 0, SIZE, SIZE);
+	const data = image.data;
+	const x0 = Math.floor(((left - margin - wheelCenterX) / (2 * radius) + .5) * SIZE);
+	const x1 = Math.ceil(((right + margin - wheelCenterX) / (2 * radius) + .5) * SIZE);
+	const rowFor = (y) => (.5 - (y - wheelCenterY) / (2 * radius)) * SIZE;
+	const y0 = Math.floor(rowFor(top + margin));
+	const y1 = Math.ceil(rowFor(bottom - margin));
+	for (let row = y0; row <= y1; row++) {
+		const y = wheelCenterY + (.5 - (row + .5) / SIZE) * 2 * radius;
+		for (let col = x0; col <= x1; col++) {
+			const x = wheelCenterX + ((col + .5) / SIZE - .5) * 2 * radius;
+			const value = (keyFraction(x, y) * keyTerm + Math.min(1, viewFactor(x, y) / centerVF) * ambientTerm) / scale;
+			const byte = Math.round(Math.min(1, value) * 255);
+			const p = (row * SIZE + col) * 4;
+			data[p] = byte;
+			data[p + 1] = byte;
+			data[p + 2] = byte;
+			data[p + 3] = 255;
+		}
+	}
+	ctx.putImageData(image, 0, 0);
+	return scale;
+}
+/**
+* Aperture walls: a rounded-rect band running from the dial face down to the
+* bottom of the dial plate. The real cut edge is lacquered the same cream as
+* the dial face; a vertex-color gradient darkens it toward the bottom for
+* contact occlusion.
+*/
+function dateWindowWallGeometry(dialThickness = DIAL_THICKNESS) {
+	const points = dateWindowOutline();
+	const positions = [];
+	const colors = [];
+	const topColor = new Color(13617082);
+	const bottomColor = new Color(7235420);
+	for (let i = 0; i < points.length; i++) {
+		const a = points[i];
+		const b = points[(i + 1) % points.length];
+		positions.push(a.x, a.y, 0, b.x, b.y, 0, b.x, b.y, -dialThickness);
+		positions.push(a.x, a.y, 0, b.x, b.y, -dialThickness, a.x, a.y, -dialThickness);
+		colors.push(...topColor.toArray(), ...topColor.toArray(), ...bottomColor.toArray());
+		colors.push(...topColor.toArray(), ...bottomColor.toArray(), ...bottomColor.toArray());
+	}
+	const geometry = new BufferGeometry();
+	geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+	geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+	geometry.computeVertexNormals();
+	return geometry;
+}
+/**
+* The photo's date aperture was cut with a feathered, oversized alpha edge
+* (hole 180×146 vs the 164×130 aperture) that bakes in a white halo from the
+* original photo's window highlight. Repaint the zone with dial cream, then
+* punch a crisp rounded-rect hole matching `dateWindowOutline` exactly, so
+* the texture cutout and the wall geometry share one contract.
+*/
+function punchDateWindow(ctx) {
+	const margin = 24;
+	const left = WATCH_GEOMETRY.DATE_WINDOW_CLIP_LEFT;
+	const top = WATCH_GEOMETRY.DATE_WINDOW_CLIP_TOP;
+	const width = WATCH_GEOMETRY.DATE_WINDOW_CLIP_RIGHT - WATCH_GEOMETRY.DATE_WINDOW_CLIP_LEFT;
+	const height = WATCH_GEOMETRY.DATE_WINDOW_CLIP_BOTTOM - WATCH_GEOMETRY.DATE_WINDOW_CLIP_TOP;
+	ctx.save();
+	ctx.fillStyle = "#eee8e0";
+	ctx.fillRect(left - margin, top - margin, width + margin * 2, height + margin * 2);
+	ctx.globalCompositeOperation = "destination-out";
+	ctx.beginPath();
+	ctx.roundRect(left, top, width, height, DATE_WINDOW_CORNER_RADIUS);
+	ctx.fill();
+	ctx.restore();
 }
 /**
 * The photograph bakes in a soft shadow ring where the case bezel meets the
@@ -3812,6 +4018,10 @@ function drawDialLinework(ctx) {
 }
 var ELEMENT_OPTIONS = [
 	{
+		key: "dial",
+		label: "Main dial"
+	},
+	{
 		key: "markers",
 		label: "Markers"
 	},
@@ -3847,30 +4057,68 @@ var HAND_KEYS = [
 	"minute",
 	"second"
 ];
-var LIGHT_DISTANCE = 5100;
+var DEFAULT_DATE_DISK = {
+	x: 24,
+	y: 0,
+	dayOffset: 25,
+	scale: .889
+};
+var DEFAULT_DATE_STRUCTURE = {
+	dialThickness: DIAL_THICKNESS,
+	dateWheelGap: -STACK.dateWheel - DIAL_THICKNESS
+};
+var DEFAULT_DATE_WHEEL_BAND = {
+	x: -1,
+	y: -2,
+	radius: .83,
+	width: .42
+};
+var DEFAULT_DATE_WHEEL_SQUEEZE = {
+	axisAngle: 0,
+	scale: .995
+};
+var SHOW_DATE_CALIBRATION_CONTROLS = false;
+var LIGHT_DISTANCE = 5e3;
 function toggleButtonClass(active) {
 	return `rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${active ? "border-black bg-black text-white hover:bg-zinc-800" : "border-black/25 bg-white text-black hover:bg-zinc-100"}`;
 }
 function Watch3D({ className = "" }) {
 	const containerRef = (0, import_react.useRef)(null);
+	const lightTrackballRef = (0, import_react.useRef)(null);
 	const sceneRef = (0, import_react.useRef)(null);
+	const dateDiskRef = (0, import_react.useRef)({ ...DEFAULT_DATE_DISK });
+	const dateStructureRef = (0, import_react.useRef)({ ...DEFAULT_DATE_STRUCTURE });
+	const dateWheelSqueezeRef = (0, import_react.useRef)({ ...DEFAULT_DATE_WHEEL_SQUEEZE });
 	const [resetView, setResetView] = (0, import_react.useState)(null);
 	const [panelOpen, setPanelOpen] = (0, import_react.useState)(false);
+	const [settingsTab, setSettingsTab] = (0, import_react.useState)("elements");
+	const [showLightSource, setShowLightSource] = (0, import_react.useState)(true);
+	const [showDateWheelBand, setShowDateWheelBand] = (0, import_react.useState)(false);
 	const [visibility, setVisibility] = (0, import_react.useState)({
-		markers: true,
+		dial: true,
+		markers: false,
 		dateWheel: true,
-		week: true,
-		day: true,
-		hour: true,
-		minute: true,
-		second: true
+		week: false,
+		day: false,
+		hour: false,
+		minute: false,
+		second: false
 	});
 	const [light, setLight] = (0, import_react.useState)({
-		azimuth: 130,
-		elevation: 48,
-		intensity: 1.4,
-		ambient: 1
+		azimuth: DEFAULT_AZIMUTH,
+		elevation: DEFAULT_ELEVATION,
+		intensity: DEFAULT_LIGHT_INTENSITY,
+		ambient: DEFAULT_AMBIENT_INTENSITY,
+		size: EMITTER_HALF_ANGLE_DEG,
+		distance: LIGHT_DISTANCE
 	});
+	const [dateDisk, setDateDisk] = (0, import_react.useState)({ ...DEFAULT_DATE_DISK });
+	const [dateStructure, setDateStructure] = (0, import_react.useState)({ ...DEFAULT_DATE_STRUCTURE });
+	const [dateWheelBand, setDateWheelBand] = (0, import_react.useState)({ ...DEFAULT_DATE_WHEEL_BAND });
+	const [dateWheelSqueeze, setDateWheelSqueeze] = (0, import_react.useState)({ ...DEFAULT_DATE_WHEEL_SQUEEZE });
+	dateDiskRef.current = dateDisk;
+	dateStructureRef.current = dateStructure;
+	dateWheelSqueezeRef.current = dateWheelSqueeze;
 	(0, import_react.useEffect)(() => {
 		const container = containerRef.current;
 		if (!container) return;
@@ -3878,16 +4126,83 @@ function Watch3D({ className = "" }) {
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		renderer.setSize(container.clientWidth, container.clientHeight);
 		renderer.toneMapping = 4;
+		renderer.toneMappingExposure = 1.22;
 		renderer.outputColorSpace = SRGBColorSpace;
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.type = 1;
 		container.appendChild(renderer.domElement);
 		const scene = new Scene();
 		scene.background = new Color(15854048);
 		const pmrem = new PMREMGenerator(renderer);
-		const environment = pmrem.fromScene(new RoomEnvironment(), .04);
+		const environment = pmrem.fromScene(buildStudioEnvironment(), .04);
 		scene.environment = environment.texture;
-		const keyLight = new DirectionalLight(16777215, 1.4);
-		keyLight.position.set(-2200, 2600, 3800);
-		scene.add(keyLight);
+		scene.environmentIntensity = DEFAULT_AMBIENT_INTENSITY;
+		scene.environmentRotation.set(0, 0, (DEFAULT_AZIMUTH - STUDIO_AZIMUTH) * DEG);
+		const keyLights = [];
+		for (let i = 0; i < AREA_LIGHT_OFFSETS.length; i++) {
+			const keyLight = new DirectionalLight(16777215, DEFAULT_LIGHT_INTENSITY / AREA_LIGHT_OFFSETS.length);
+			keyLight.castShadow = true;
+			keyLight.shadow.mapSize.set(2048, 2048);
+			keyLight.shadow.camera.left = -1300;
+			keyLight.shadow.camera.right = 1300;
+			keyLight.shadow.camera.top = 1300;
+			keyLight.shadow.camera.bottom = -1300;
+			keyLight.shadow.camera.near = 2e3;
+			keyLight.shadow.camera.far = 9e3;
+			keyLight.shadow.camera.updateProjectionMatrix();
+			keyLight.shadow.bias = -2e-4;
+			keyLight.shadow.normalBias = 4;
+			keyLight.shadow.radius = 4;
+			scene.add(keyLight);
+			keyLights.push(keyLight);
+		}
+		positionKeyLights(keyLights, DEFAULT_AZIMUTH, DEFAULT_ELEVATION);
+		const lightSource = new Group();
+		lightSource.name = "Key softbox visualization";
+		const lightSourcePanel = new Group();
+		const sourcePlaneGeometry = new PlaneGeometry(1, 1);
+		const sourceFabric = new Mesh(sourcePlaneGeometry, new MeshBasicMaterial({
+			color: 16775391,
+			side: 0,
+			transparent: true,
+			opacity: .78,
+			depthWrite: false,
+			toneMapped: false
+		}));
+		const sourceBacking = new Mesh(sourcePlaneGeometry, new MeshBasicMaterial({
+			color: 1513239,
+			side: 1,
+			transparent: true,
+			opacity: .22,
+			depthWrite: false,
+			toneMapped: false
+		}));
+		const sourceOutline = new LineSegments(new EdgesGeometry(sourcePlaneGeometry), new LineBasicMaterial({
+			color: 16738816,
+			toneMapped: false
+		}));
+		sourceOutline.position.z = 2;
+		const sourceFrameMaterial = new MeshBasicMaterial({
+			color: 16738816,
+			side: 2,
+			toneMapped: false
+		});
+		const sourceFrame = new Group();
+		const addFrameBar = (width, height, x, y) => {
+			const bar = new Mesh(new PlaneGeometry(width, height), sourceFrameMaterial);
+			bar.position.set(x, y, 3);
+			sourceFrame.add(bar);
+		};
+		addFrameBar(1, .025, 0, .4875);
+		addFrameBar(1, .025, 0, -.4875);
+		addFrameBar(.025, .95, .4875, 0);
+		addFrameBar(.025, .95, -.4875, 0);
+		lightSourcePanel.add(sourceFabric, sourceBacking, sourceOutline, sourceFrame);
+		lightSource.add(lightSourcePanel);
+		const lightSourceArrow = new ArrowHelper(new Vector3(0, 0, 1), new Vector3(0, 0, 30), LIGHT_DISTANCE, 16738816, 180, 90);
+		lightSource.add(lightSourceArrow);
+		scene.add(lightSource);
+		positionLightSourceVisual(lightSourcePanel, lightSourceArrow, DEFAULT_AZIMUTH, DEFAULT_ELEVATION, EMITTER_HALF_ANGLE_DEG, LIGHT_DISTANCE);
 		const camera = new PerspectiveCamera(36, container.clientWidth / Math.max(1, container.clientHeight), 10, 4e4);
 		camera.position.set(0, 0, 4300);
 		const controls = new TrackballControls(camera, renderer.domElement);
@@ -3896,19 +4211,44 @@ function Watch3D({ className = "" }) {
 		controls.panSpeed = .8;
 		controls.dynamicDampingFactor = .12;
 		controls.minDistance = 400;
-		controls.maxDistance = 12e3;
+		controls.maxDistance = 3e4;
 		controls.target.set(0, 0, 0);
 		const textureLoader = new TextureLoader();
-		const loadTexture = (fileName) => {
-			const texture = textureLoader.load(`/${fileName}`);
-			texture.colorSpace = SRGBColorSpace;
-			texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-			return texture;
-		};
-		const dateWheelTexture = loadTexture("date-ring-overlay.png");
-		const dialMaterial = new MeshBasicMaterial({
+		const dateWheelTexture = textureLoader.load(`/date-ring-overlay.png`, (texture) => {
+			const image = texture.image;
+			const canvas = document.createElement("canvas");
+			const imageWidth = image.naturalWidth || image.width;
+			const imageHeight = image.naturalHeight || image.height;
+			canvas.width = imageWidth + DATE_RING_TEXTURE_MARGIN * 2;
+			canvas.height = imageHeight + DATE_RING_TEXTURE_MARGIN * 2;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) return;
+			ctx.fillStyle = "#f9f9f9";
+			ctx.beginPath();
+			ctx.arc(canvas.width / 2, canvas.height / 2, 1227, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.drawImage(image, DATE_RING_TEXTURE_MARGIN, DATE_RING_TEXTURE_MARGIN);
+			ctx.strokeStyle = "#f9f9f9";
+			ctx.lineWidth = 8;
+			ctx.beginPath();
+			ctx.arc(canvas.width / 2, canvas.height / 2, 895, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.arc(canvas.width / 2, canvas.height / 2, 1147, 0, Math.PI * 2);
+			ctx.stroke();
+			texture.image = canvas;
+			texture.needsUpdate = true;
+		});
+		dateWheelTexture.colorSpace = SRGBColorSpace;
+		dateWheelTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+		const dialMaterial = new MeshPhysicalMaterial({
 			alphaTest: .5,
-			toneMapped: false
+			metalness: 0,
+			roughness: .55,
+			specularIntensity: .4,
+			clearcoat: .2,
+			clearcoatRoughness: .5,
+			shadowSide: 2
 		});
 		textureLoader.load(`/reference-handless-date-cutout.png`, (photo) => {
 			const canvas = document.createElement("canvas");
@@ -3918,6 +4258,7 @@ function Watch3D({ className = "" }) {
 			let composed;
 			if (ctx) {
 				ctx.drawImage(photo.image, 0, 0);
+				punchDateWindow(ctx);
 				cleanBezelShadow(ctx);
 				ctx.fillStyle = "#eee8e0";
 				ctx.beginPath();
@@ -3966,8 +4307,11 @@ function Watch3D({ className = "" }) {
 			side: 2
 		});
 		const wallMaterial = new MeshStandardMaterial({
-			color: 12103844,
-			roughness: .9,
+			color: 16777215,
+			vertexColors: true,
+			roughness: .55,
+			envMap: environment.texture,
+			envMapIntensity: .15,
 			side: 2
 		});
 		const watch = new Group();
@@ -3983,20 +4327,98 @@ function Watch3D({ className = "" }) {
 			}
 		}
 		const dial = new Mesh(dialGeometry, dialMaterial);
-		watch.add(dial);
-		const dateWheel = new Mesh(new CircleGeometry(WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS, 128), new MeshBasicMaterial({
+		dial.castShadow = true;
+		dial.receiveShadow = true;
+		const dialAssembly = new Group();
+		dialAssembly.add(dial);
+		watch.add(dialAssembly);
+		const wheelShadingTerms = (elevationDeg, intensity, ambient) => ({
+			keyTerm: intensity * Math.sin(elevationDeg * DEG),
+			ambientTerm: ambient * .45
+		});
+		const lightMapCanvas = document.createElement("canvas");
+		lightMapCanvas.width = 1024;
+		lightMapCanvas.height = 1024;
+		const initialTerms = wheelShadingTerms(DEFAULT_ELEVATION, DEFAULT_LIGHT_INTENSITY, DEFAULT_AMBIENT_INTENSITY);
+		const initialScale = bakeDateWheelShading(lightMapCanvas, DEFAULT_AZIMUTH, DEFAULT_ELEVATION, initialTerms.keyTerm, initialTerms.ambientTerm);
+		const dateWheelLightMap = new CanvasTexture(lightMapCanvas);
+		dateWheelLightMap.center.set(.5, .5);
+		dateWheelLightMap.matrixAutoUpdate = false;
+		const dateWheelMaterial = new MeshBasicMaterial({
 			map: dateWheelTexture,
+			color: 16777215,
 			alphaTest: .4,
+			lightMap: dateWheelLightMap,
+			lightMapIntensity: initialScale
+		});
+		const dateWheelFace = new Mesh(new CircleGeometry(DATE_WHEEL_OUTER_RADIUS, 192), dateWheelMaterial);
+		const initialBandRadius = DATE_WHEEL_OUTER_RADIUS * DEFAULT_DATE_WHEEL_BAND.radius;
+		const initialBandWidth = initialBandRadius * DEFAULT_DATE_WHEEL_BAND.width;
+		const dateWheelBandMesh = new Mesh(new RingGeometry(initialBandRadius - initialBandWidth / 2, initialBandRadius + initialBandWidth / 2, 256), new MeshBasicMaterial({
+			color: 27903,
+			transparent: true,
+			opacity: .7,
+			depthWrite: false,
+			side: 2,
 			toneMapped: false
 		}));
+		dateWheelBandMesh.position.set(DEFAULT_DATE_WHEEL_BAND.x * DATE_WHEEL_OFFSET_SCALE, -DEFAULT_DATE_WHEEL_BAND.y * DATE_WHEEL_OFFSET_SCALE, 2);
+		dateWheelBandMesh.visible = false;
+		const setDateWheelBandVisible = (visible) => {
+			dateWheelBandMesh.visible = visible;
+		};
+		let currentBandRadius = DEFAULT_DATE_WHEEL_BAND.radius;
+		let currentBandWidth = DEFAULT_DATE_WHEEL_BAND.width;
+		const updateDateWheelBand = (settings) => {
+			dateWheelBandMesh.position.set(settings.x * DATE_WHEEL_OFFSET_SCALE, -settings.y * DATE_WHEEL_OFFSET_SCALE, 2);
+			if (settings.radius === currentBandRadius && settings.width === currentBandWidth) return;
+			const radius = DATE_WHEEL_OUTER_RADIUS * settings.radius;
+			const width = radius * settings.width;
+			const previousGeometry = dateWheelBandMesh.geometry;
+			dateWheelBandMesh.geometry = new RingGeometry(radius - width / 2, radius + width / 2, 256);
+			previousGeometry.dispose();
+			currentBandRadius = settings.radius;
+			currentBandWidth = settings.width;
+		};
+		const dateWheelSqueezeOuter = new Group();
+		const dateWheelSqueezeInner = new Group();
+		dateWheelSqueezeOuter.add(dateWheelSqueezeInner);
+		dateWheelSqueezeInner.add(dateWheelFace);
+		const squeezeAxisDirection = new Vector3(1, 0, 0);
+		const dateWheelSqueezeAxis = new ArrowHelper(squeezeAxisDirection, new Vector3(0, 0, 4), DATE_WHEEL_OUTER_RADIUS * .48, 16723285, 42, 22);
+		dateWheelSqueezeAxis.visible = SHOW_DATE_CALIBRATION_CONTROLS;
+		const dateWheelRotation = new Group();
+		dateWheelRotation.add(dateWheelSqueezeOuter, dateWheelBandMesh, dateWheelSqueezeAxis);
+		const dateWheel = new Group();
+		dateWheel.add(dateWheelRotation);
+		const setDialOcclusion = (enabled) => {
+			dateWheelMaterial.lightMap = enabled ? dateWheelLightMap : null;
+			dateWheelMaterial.needsUpdate = true;
+		};
+		let bakeTimer;
+		const updateWheelLight = (azimuthDeg, elevationDeg, intensity, ambient, emitterHalfAngleDeg, dialThickness, dateWheelDepth) => {
+			const { keyTerm, ambientTerm } = wheelShadingTerms(elevationDeg, intensity, ambient);
+			dateWheelMaterial.lightMapIntensity = keyTerm + ambientTerm;
+			clearTimeout(bakeTimer);
+			bakeTimer = setTimeout(() => {
+				bakeDateWheelShading(lightMapCanvas, azimuthDeg, elevationDeg, keyTerm, ambientTerm, emitterHalfAngleDeg, dialThickness, dateWheelDepth);
+				dateWheelLightMap.needsUpdate = true;
+			}, 120);
+		};
 		dateWheel.position.set(WATCH_GEOMETRY.DATE_RING_OFFSET_X * DATE_WHEEL_OFFSET_SCALE, -WATCH_GEOMETRY.DATE_RING_OFFSET_Y * DATE_WHEEL_OFFSET_SCALE, STACK.dateWheel);
 		watch.add(dateWheel);
-		watch.add(new Mesh(dateWindowWallGeometry(), wallMaterial));
+		const apertureWalls = new Mesh(dateWindowWallGeometry(), wallMaterial);
+		apertureWalls.castShadow = true;
+		apertureWalls.receiveShadow = true;
+		dialAssembly.add(apertureWalls);
 		const movementBackdrop = new Mesh(new CircleGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, 96), new MeshStandardMaterial({
 			color: 1447188,
 			roughness: .85,
+			envMap: environment.texture,
+			envMapIntensity: .1,
 			side: 2
 		}));
+		movementBackdrop.receiveShadow = true;
 		movementBackdrop.position.z = STACK.movementBackdrop;
 		watch.add(movementBackdrop);
 		const markersGroup = new Group();
@@ -4004,6 +4426,7 @@ function Watch3D({ className = "" }) {
 		const sharedBaton = batonGeometry();
 		const addBaton = (angleDeg, lateralOffset = 0) => {
 			const baton = new Mesh(sharedBaton, polishedBlack);
+			baton.castShadow = true;
 			const group = new Group();
 			baton.position.x = lateralOffset;
 			group.add(baton);
@@ -4081,6 +4504,16 @@ function Watch3D({ className = "" }) {
 		secondsHand.add(pin);
 		secondsHand.position.z = STACK.secondsHand;
 		watch.add(secondsHand);
+		for (const handGroup of [
+			dayHand,
+			weekHand,
+			hourHand,
+			minuteHand,
+			secondsHand
+		]) handGroup.traverse((node) => {
+			if (node instanceof Mesh) node.castShadow = true;
+		});
+		centerPost.castShadow = true;
 		const rim = new Mesh(new CylinderGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, WATCH_GEOMETRY.R_DIAL_EDGE + 10, -STACK.movementBackdrop, 128, 1, true), new MeshStandardMaterial({
 			color: 1776153,
 			roughness: .7,
@@ -4088,7 +4521,26 @@ function Watch3D({ className = "" }) {
 		}));
 		rim.rotation.x = Math.PI / 2;
 		rim.position.z = STACK.movementBackdrop / 2;
+		rim.castShadow = true;
+		rim.receiveShadow = true;
 		watch.add(rim);
+		let currentStructure = { ...DEFAULT_DATE_STRUCTURE };
+		const updateDateStructure = (settings) => {
+			if (settings.dialThickness !== currentStructure.dialThickness) {
+				const previousWalls = apertureWalls.geometry;
+				apertureWalls.geometry = dateWindowWallGeometry(settings.dialThickness);
+				previousWalls.dispose();
+			}
+			const enclosureDepth = settings.dialThickness + settings.dateWheelGap + 10;
+			movementBackdrop.position.z = -enclosureDepth;
+			if (settings.dialThickness !== currentStructure.dialThickness || settings.dateWheelGap !== currentStructure.dateWheelGap) {
+				const previousRim = rim.geometry;
+				rim.geometry = new CylinderGeometry(WATCH_GEOMETRY.R_DIAL_EDGE + 10, WATCH_GEOMETRY.R_DIAL_EDGE + 10, enclosureDepth, 128, 1, true);
+				previousRim.dispose();
+				rim.position.z = -enclosureDepth / 2;
+			}
+			currentStructure = { ...settings };
+		};
 		const mountDate = /* @__PURE__ */ new Date();
 		const anchor = {
 			isoWeekYear: isoWeekCoordinates(mountDate).year,
@@ -4107,13 +4559,45 @@ function Watch3D({ className = "" }) {
 			const weekDeg = WATCH_GEOMETRY.WEEK_OFFSET_DEG + (week - 1) * WATCH_GEOMETRY.WEEK_STEP_DEG;
 			const dayIndex = anchor.weekday + localCalendarDayOrdinal(now) - anchor.ordinal;
 			const dayDeg = WATCH_GEOMETRY.DAY_SECTOR_OFFSET_DEG - WATCH_GEOMETRY.DAY_SECTOR_STEP_DEG / 2 + dayIndex * WATCH_GEOMETRY.DAY_SECTOR_STEP_DEG;
-			const wheelDeg = continuousDateWheelAngle(now, anchor.month, WATCH_GEOMETRY.DATE_WHEEL_UNWRAPPED_ANGLES);
+			const disk = dateDiskRef.current;
+			const diskDate = new Date(now);
+			diskDate.setDate(diskDate.getDate() + disk.dayOffset);
+			const wheelDeg = continuousDateWheelAngle(diskDate, anchor.month, WATCH_GEOMETRY.DATE_WHEEL_UNWRAPPED_ANGLES);
+			const diskDeltaX = disk.x * DATE_WHEEL_OFFSET_SCALE;
+			const diskDeltaY = -disk.y * DATE_WHEEL_OFFSET_SCALE;
+			const structure = dateStructureRef.current;
+			const dateWheelDepth = structure.dialThickness + structure.dateWheelGap;
+			const squeeze = dateWheelSqueezeRef.current;
+			const squeezeAxis = squeeze.axisAngle * DEG;
 			secondsHand.rotation.z = -secondsDeg * DEG;
 			minuteHand.rotation.z = -minuteDeg * DEG;
 			hourHand.rotation.z = -hourDeg * DEG;
 			weekHand.rotation.z = -weekDeg * DEG;
 			dayHand.rotation.z = -dayDeg * DEG;
-			dateWheel.rotation.z = -wheelDeg * DEG;
+			dateWheel.position.set(WATCH_GEOMETRY.DATE_RING_OFFSET_X * DATE_WHEEL_OFFSET_SCALE + diskDeltaX, -WATCH_GEOMETRY.DATE_RING_OFFSET_Y * DATE_WHEEL_OFFSET_SCALE + diskDeltaY, -dateWheelDepth);
+			dateWheel.scale.setScalar(disk.scale);
+			dateWheelSqueezeOuter.rotation.z = squeezeAxis;
+			dateWheelSqueezeOuter.scale.set(squeeze.scale, 1, 1);
+			dateWheelSqueezeInner.rotation.z = -squeezeAxis;
+			dateWheelRotation.rotation.z = -wheelDeg * DEG;
+			squeezeAxisDirection.set(Math.cos(squeezeAxis), Math.sin(squeezeAxis), 0);
+			dateWheelSqueezeAxis.setDirection(squeezeAxisDirection);
+			const ca = Math.cos(squeezeAxis);
+			const sa = Math.sin(squeezeAxis);
+			const a11 = squeeze.scale * ca * ca + sa * sa;
+			const a12 = (squeeze.scale - 1) * ca * sa;
+			const a22 = squeeze.scale * sa * sa + ca * ca;
+			const wheelRadians = wheelDeg * DEG;
+			const cw = Math.cos(wheelRadians);
+			const sw = Math.sin(wheelRadians);
+			const mapScale = DATE_WHEEL_RADIUS_SCALE * disk.scale;
+			const m11 = mapScale * (cw * a11 + sw * a12);
+			const m12 = mapScale * (cw * a12 + sw * a22);
+			const m21 = mapScale * (-sw * a11 + cw * a12);
+			const m22 = mapScale * (-sw * a12 + cw * a22);
+			const qx = diskDeltaX / (2 * WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS);
+			const qy = diskDeltaY / (2 * WATCH_GEOMETRY.DATE_RING_DEFAULT_RADIUS);
+			dateWheelLightMap.matrix.set(m11, m12, .5 + qx - .5 * (m11 + m12), m21, m22, .5 + qy - .5 * (m21 + m22), 0, 0, 1);
 		};
 		renderer.setAnimationLoop(() => {
 			controls.update();
@@ -4129,6 +4613,7 @@ function Watch3D({ className = "" }) {
 		});
 		sceneRef.current = {
 			elements: {
+				dial: dialAssembly,
 				markers: markersGroup,
 				dateWheel,
 				week: weekHand,
@@ -4137,8 +4622,22 @@ function Watch3D({ className = "" }) {
 				minute: minuteHand,
 				second: secondsHand
 			},
-			keyLight,
-			scene
+			keyLights,
+			lightSource,
+			lightSourcePanel,
+			lightSourceArrow,
+			camera,
+			controls,
+			scene,
+			setDialOcclusion,
+			setDateWheelBandVisible,
+			updateDateStructure,
+			updateDateWheelBand,
+			updateWheelLight
+		};
+		window.__watch3d = {
+			camera,
+			controls
 		};
 		const resizeObserver = new ResizeObserver(() => {
 			const width = container.clientWidth;
@@ -4156,13 +4655,15 @@ function Watch3D({ className = "" }) {
 			renderer.setAnimationLoop(null);
 			controls.dispose();
 			scene.traverse((object) => {
-				if (object instanceof Mesh) {
+				if (object instanceof Mesh || object instanceof Line) {
 					object.geometry.dispose();
 					(Array.isArray(object.material) ? object.material : [object.material]).forEach((material) => material.dispose());
 				}
 			});
 			dialMaterial.map?.dispose();
 			dateWheelTexture.dispose();
+			dateWheelLightMap.dispose();
+			clearTimeout(bakeTimer);
 			environment.texture.dispose();
 			pmrem.dispose();
 			renderer.dispose();
@@ -4173,40 +4674,59 @@ function Watch3D({ className = "" }) {
 		const handles = sceneRef.current;
 		if (!handles) return;
 		for (const { key } of ELEMENT_OPTIONS) handles.elements[key].visible = visibility[key];
+		handles.setDialOcclusion(visibility.dial);
 	}, [visibility]);
+	(0, import_react.useEffect)(() => {
+		sceneRef.current?.updateDateStructure(dateStructure);
+	}, [dateStructure]);
 	(0, import_react.useEffect)(() => {
 		const handles = sceneRef.current;
 		if (!handles) return;
-		const azimuth = light.azimuth * DEG;
-		const elevation = light.elevation * DEG;
-		handles.keyLight.position.set(Math.cos(azimuth) * Math.cos(elevation) * LIGHT_DISTANCE, Math.sin(azimuth) * Math.cos(elevation) * LIGHT_DISTANCE, Math.sin(elevation) * LIGHT_DISTANCE);
-		handles.keyLight.intensity = light.intensity;
+		const clusterSpread = AREA_LIGHT_SPREAD_DEG * (light.size / EMITTER_HALF_ANGLE_DEG);
+		positionKeyLights(handles.keyLights, light.azimuth, light.elevation, clusterSpread, light.distance);
+		positionLightSourceVisual(handles.lightSourcePanel, handles.lightSourceArrow, light.azimuth, light.elevation, light.size, light.distance);
+		for (const keyLight of handles.keyLights) keyLight.intensity = light.intensity / handles.keyLights.length;
+	}, [
+		light.azimuth,
+		light.distance,
+		light.elevation,
+		light.intensity,
+		light.size
+	]);
+	(0, import_react.useEffect)(() => {
+		const handles = sceneRef.current;
+		if (!handles) return;
+		handles.updateWheelLight(light.azimuth, light.elevation, light.intensity, light.ambient, light.size, dateStructure.dialThickness, dateStructure.dialThickness + dateStructure.dateWheelGap);
 		handles.scene.environmentIntensity = light.ambient;
-	}, [light]);
+		handles.scene.environmentRotation.set(0, 0, (light.azimuth - STUDIO_AZIMUTH) * DEG);
+	}, [
+		dateStructure.dateWheelGap,
+		dateStructure.dialThickness,
+		light.ambient,
+		light.azimuth,
+		light.elevation,
+		light.intensity,
+		light.size
+	]);
+	(0, import_react.useEffect)(() => {
+		const handles = sceneRef.current;
+		if (!handles) return;
+		handles.lightSource.visible = showLightSource;
+	}, [showLightSource]);
+	(0, import_react.useEffect)(() => {
+		sceneRef.current?.updateDateWheelBand(dateWheelBand);
+	}, [dateWheelBand]);
+	(0, import_react.useEffect)(() => {
+		sceneRef.current?.setDateWheelBandVisible(showDateWheelBand);
+	}, [showDateWheelBand]);
 	const lightSliders = [
-		{
-			key: "azimuth",
-			label: "Direction",
-			min: 0,
-			max: 360,
-			step: 1,
-			valueText: `${Math.round(light.azimuth)}°`
-		},
-		{
-			key: "elevation",
-			label: "Elevation",
-			min: 5,
-			max: 85,
-			step: 1,
-			valueText: `${Math.round(light.elevation)}°`
-		},
 		{
 			key: "intensity",
 			label: "Intensity",
 			min: 0,
-			max: 3,
+			max: 7,
 			step: .05,
-			valueText: `${Math.round(light.intensity / 1.4 * 100)}%`
+			valueText: `${Math.round(light.intensity / 3.5 * 100)}%`
 		},
 		{
 			key: "ambient",
@@ -4215,8 +4735,71 @@ function Watch3D({ className = "" }) {
 			max: 2,
 			step: .05,
 			valueText: `${Math.round(light.ambient * 100)}%`
+		},
+		{
+			key: "size",
+			label: "Source size",
+			min: 6,
+			max: 40,
+			step: 1,
+			valueText: `${Math.round(light.size)}°`
+		},
+		{
+			key: "distance",
+			label: "Source distance",
+			min: 2500,
+			max: 9e3,
+			step: 100,
+			valueText: `${(light.distance / (WATCH_GEOMETRY.R_DIAL_EDGE * 2)).toFixed(1)}× dial`
 		}
 	];
+	const trackballRadius = Math.cos(light.elevation * DEG);
+	const trackballPosition = {
+		u: Math.cos(light.azimuth * DEG) * trackballRadius,
+		v: -Math.sin(light.azimuth * DEG) * trackballRadius
+	};
+	const setLightFromTrackball = (u, v) => {
+		const maxRadius = Math.cos(5 * DEG);
+		const radius = Math.hypot(u, v);
+		const scale = radius > maxRadius ? maxRadius / radius : 1;
+		const nextU = u * scale;
+		const nextV = v * scale;
+		const nextRadius = Math.hypot(nextU, nextV);
+		const azimuth = (Math.atan2(-nextV, nextU) / DEG + 360) % 360;
+		const elevation = Math.asin(Math.sqrt(Math.max(0, 1 - nextRadius * nextRadius))) / DEG;
+		setLight((current) => ({
+			...current,
+			azimuth,
+			elevation
+		}));
+	};
+	const updateLightFromPointer = (clientX, clientY) => {
+		const bounds = lightTrackballRef.current?.getBoundingClientRect();
+		if (!bounds) return;
+		setLightFromTrackball((clientX - bounds.left) / bounds.width * 2 - 1, (clientY - bounds.top) / bounds.height * 2 - 1);
+	};
+	const frameLightSource = () => {
+		const handles = sceneRef.current;
+		if (!handles) return;
+		handles.lightSource.visible = true;
+		setShowLightSource(true);
+		const frameCenter = handles.lightSourcePanel.position.clone().multiplyScalar(.5);
+		const panelHalfDiagonal = handles.lightSourcePanel.scale.x * Math.SQRT2 / 2;
+		const radius = light.distance / 2 + Math.max(WATCH_GEOMETRY.R_DIAL_EDGE + 120, panelHalfDiagonal);
+		const viewDirection = handles.camera.position.clone().sub(handles.controls.target).normalize();
+		const framingDistance = Math.min(28e3, Math.max(5e3, radius / Math.sin(handles.camera.fov * DEG / 2) * 1.08));
+		handles.controls.target.copy(frameCenter);
+		handles.camera.position.copy(frameCenter).addScaledVector(viewDirection, framingDistance);
+		handles.camera.lookAt(frameCenter);
+		handles.controls.update();
+	};
+	const selectedDiskDate = /* @__PURE__ */ new Date();
+	selectedDiskDate.setDate(selectedDiskDate.getDate() + dateDisk.dayOffset);
+	const selectedDiskDateText = selectedDiskDate.toLocaleDateString(void 0, {
+		month: "short",
+		day: "numeric"
+	});
+	dateDisk.dayOffset === 0 ? `${selectedDiskDateText}` : (`${selectedDiskDateText}`, dateDisk.dayOffset, `${Math.abs(dateDisk.dayOffset)}`);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		ref: containerRef,
 		className: `h-dvh w-full ${className}`,
@@ -4234,61 +4817,201 @@ function Watch3D({ className = "" }) {
 				className: "absolute left-3 top-16 z-10 w-56 rounded-xl border border-black/20 bg-white/90 p-3 text-black shadow-lg backdrop-blur",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mb-1 text-[10px] font-bold",
-						children: "Elements"
+						role: "tablist",
+						"aria-label": "3D settings groups",
+						className: "mb-3 grid grid-cols-2 gap-1 rounded-lg bg-black/10 p-1",
+						children: ["elements", "light"].map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							role: "tab",
+							"aria-selected": settingsTab === tab,
+							onClick: () => setSettingsTab(tab),
+							className: `rounded-md px-2 py-1 text-[11px] font-semibold capitalize transition ${settingsTab === tab ? "bg-black text-white" : "text-black hover:bg-black/10"}`,
+							children: tab
+						}, tab))
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "grid grid-cols-2 gap-1",
-						children: [ELEMENT_OPTIONS.map(({ key, label }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							"aria-pressed": visibility[key],
-							onClick: () => setVisibility((current) => ({
-								...current,
-								[key]: !current[key]
-							})),
-							className: toggleButtonClass(visibility[key]),
-							children: label
-						}, key)), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-							type: "button",
-							"aria-pressed": HAND_KEYS.every((key) => visibility[key]),
-							onClick: () => setVisibility((current) => {
-								const show = !HAND_KEYS.every((key) => current[key]);
-								const next = { ...current };
-								for (const key of HAND_KEYS) next[key] = show;
-								return next;
+					settingsTab === "elements" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						role: "tabpanel",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mb-1 text-[10px] font-bold",
+								children: "Elements"
 							}),
-							className: toggleButtonClass(HAND_KEYS.every((key) => visibility[key])),
-							children: "All hands"
-						})]
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "grid grid-cols-2 gap-1",
+								children: [ELEMENT_OPTIONS.map(({ key, label }) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									"aria-pressed": visibility[key],
+									onClick: () => setVisibility((current) => ({
+										...current,
+										[key]: !current[key]
+									})),
+									className: toggleButtonClass(visibility[key]),
+									children: label
+								}, key)), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "button",
+									"aria-pressed": HAND_KEYS.every((key) => visibility[key]),
+									onClick: () => setVisibility((current) => {
+										const show = !HAND_KEYS.every((key) => current[key]);
+										const next = { ...current };
+										for (const key of HAND_KEYS) next[key] = show;
+										return next;
+									}),
+									className: toggleButtonClass(HAND_KEYS.every((key) => visibility[key])),
+									children: "All hands"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mb-1 mt-3 border-t border-black/15 pt-2 text-[10px] font-bold",
+								children: "Structure"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "mt-1.5 block text-[10px] font-semibold",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "flex items-center justify-between gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Main dial thickness" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
+										className: "tabular-nums",
+										children: [dateStructure.dialThickness.toFixed(0), " px"]
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "range",
+									min: 2,
+									max: 40,
+									step: 1,
+									value: dateStructure.dialThickness,
+									onChange: (event) => setDateStructure((current) => ({
+										...current,
+										dialThickness: Number(event.target.value)
+									})),
+									className: "mt-0.5 w-full cursor-pointer accent-black",
+									"aria-label": "Main dial thickness"
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "mt-1.5 block text-[10px] font-semibold",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "flex items-center justify-between gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Date wheel gap" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("output", {
+										className: "tabular-nums",
+										children: [dateStructure.dateWheelGap.toFixed(0), " px"]
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "range",
+									min: 0,
+									max: 120,
+									step: 1,
+									value: dateStructure.dateWheelGap,
+									onChange: (event) => setDateStructure((current) => ({
+										...current,
+										dateWheelGap: Number(event.target.value)
+									})),
+									className: "mt-0.5 w-full cursor-pointer accent-black",
+									"aria-label": "Distance between date wheel and dial"
+								})]
+							})
+						]
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mb-1 mt-3 border-t border-black/15 pt-2 text-[10px] font-bold",
-						children: "Light"
-					}),
-					lightSliders.map((slider) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-						className: "mt-1.5 block text-[10px] font-semibold",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "flex items-center justify-between gap-2",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: slider.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("output", {
-								className: "tabular-nums",
-								children: slider.valueText
-							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-							type: "range",
-							min: slider.min,
-							max: slider.max,
-							step: slider.step,
-							value: light[slider.key],
-							onChange: (event) => setLight((current) => ({
-								...current,
-								[slider.key]: Number(event.target.value)
-							})),
-							className: "mt-0.5 w-full cursor-pointer accent-black",
-							"aria-label": `Light ${slider.label.toLowerCase()}`
-						})]
-					}, slider.key))
+					settingsTab === "light" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						role: "tabpanel",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mb-1 flex items-center justify-between",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-[10px] font-bold",
+									children: "Light"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "flex gap-1",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: frameLightSource,
+										className: "rounded-md border border-black/25 bg-white px-2 py-1 text-[10px] font-semibold text-black transition hover:bg-zinc-100",
+										children: "Frame"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										"aria-pressed": showLightSource,
+										onClick: () => setShowLightSource((visible) => !visible),
+										className: `rounded-md border px-2 py-1 text-[10px] font-semibold transition ${showLightSource ? "border-orange-600 bg-orange-500 text-white" : "border-black/25 bg-white text-black hover:bg-zinc-100"}`,
+										children: showLightSource ? "Hide" : "Show"
+									})]
+								})]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								ref: lightTrackballRef,
+								role: "slider",
+								tabIndex: 0,
+								"aria-label": "Key light position",
+								"aria-valuemin": 5,
+								"aria-valuemax": 90,
+								"aria-valuenow": Math.round(light.elevation),
+								"aria-valuetext": `${Math.round(light.azimuth)} degrees direction, ${Math.round(light.elevation)} degrees elevation`,
+								onPointerDown: (event) => {
+									event.currentTarget.setPointerCapture(event.pointerId);
+									updateLightFromPointer(event.clientX, event.clientY);
+								},
+								onPointerMove: (event) => {
+									if (event.currentTarget.hasPointerCapture(event.pointerId)) updateLightFromPointer(event.clientX, event.clientY);
+								},
+								onKeyDown: (event) => {
+									const step = event.shiftKey ? .02 : .06;
+									const delta = {
+										ArrowLeft: [-step, 0],
+										ArrowRight: [step, 0],
+										ArrowUp: [0, -step],
+										ArrowDown: [0, step]
+									}[event.key];
+									if (!delta) return;
+									event.preventDefault();
+									setLightFromTrackball(trackballPosition.u + delta[0], trackballPosition.v + delta[1]);
+								},
+								className: "relative mx-auto mt-2 h-28 w-28 touch-none rounded-full border-2 border-black/40 bg-[radial-gradient(circle_at_center,#fff_0%,#e7e7e7_58%,#a8a8a8_100%)] shadow-inner outline-none focus-visible:ring-2 focus-visible:ring-black",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute bottom-0 left-1/2 top-0 w-px bg-black/15" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "pointer-events-none absolute left-0 right-0 top-1/2 h-px bg-black/15" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black shadow-md",
+										style: {
+											left: `${(trackballPosition.u + 1) * 50}%`,
+											top: `${(trackballPosition.v + 1) * 50}%`
+										}
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-1 text-center text-[10px] tabular-nums text-black",
+								children: [
+									"Direction ",
+									Math.round(light.azimuth),
+									"° · Elevation ",
+									Math.round(light.elevation),
+									"°"
+								]
+							}),
+							lightSliders.map((slider) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "mt-1.5 block text-[10px] font-semibold",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "flex items-center justify-between gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: slider.label }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("output", {
+										className: "tabular-nums",
+										children: slider.valueText
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									type: "range",
+									min: slider.min,
+									max: slider.max,
+									step: slider.step,
+									value: light[slider.key],
+									onChange: (event) => setLight((current) => ({
+										...current,
+										[slider.key]: Number(event.target.value)
+									})),
+									className: "mt-0.5 w-full cursor-pointer accent-black",
+									"aria-label": `Light ${slider.label.toLowerCase()}`
+								})]
+							}, slider.key))
+						]
+					})
 				]
 			}),
+			SHOW_DATE_CALIBRATION_CONTROLS,
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {

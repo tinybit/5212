@@ -14807,296 +14807,6 @@ var DataTexture = class extends Texture {
 		this.unpackAlignment = 1;
 	}
 };
-/**
-* An instanced version of a buffer attribute.
-*
-* @augments BufferAttribute
-*/
-var InstancedBufferAttribute = class extends BufferAttribute {
-	/**
-	* Constructs a new instanced buffer attribute.
-	*
-	* @param {TypedArray} array - The array holding the attribute data.
-	* @param {number} itemSize - The item size.
-	* @param {boolean} [normalized=false] - Whether the data are normalized or not.
-	* @param {number} [meshPerAttribute=1] - How often a value of this buffer attribute should be repeated.
-	*/
-	constructor(array, itemSize, normalized, meshPerAttribute = 1) {
-		super(array, itemSize, normalized);
-		/**
-		* This flag can be used for type testing.
-		*
-		* @type {boolean}
-		* @readonly
-		* @default true
-		*/
-		this.isInstancedBufferAttribute = true;
-		/**
-		* Defines how often a value of this buffer attribute should be repeated. A
-		* value of one means that each value of the instanced attribute is used for
-		* a single instance. A value of two means that each value is used for two
-		* consecutive instances (and so on).
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.meshPerAttribute = meshPerAttribute;
-	}
-	copy(source) {
-		super.copy(source);
-		this.meshPerAttribute = source.meshPerAttribute;
-		return this;
-	}
-	toJSON() {
-		const data = super.toJSON();
-		data.meshPerAttribute = this.meshPerAttribute;
-		data.isInstancedBufferAttribute = true;
-		return data;
-	}
-};
-var _instanceLocalMatrix = /*@__PURE__*/ new Matrix4();
-var _instanceWorldMatrix = /*@__PURE__*/ new Matrix4();
-var _instanceIntersects = [];
-var _box3 = /*@__PURE__*/ new Box3();
-var _identity = /*@__PURE__*/ new Matrix4();
-var _mesh$1 = /*@__PURE__*/ new Mesh();
-var _sphere$4 = /*@__PURE__*/ new Sphere();
-/**
-* A special version of a mesh with instanced rendering support. Use
-* this class if you have to render a large number of objects with the same
-* geometry and material(s) but with different world transformations. The usage
-* of 'InstancedMesh' will help you to reduce the number of draw calls and thus
-* improve the overall rendering performance in your application.
-*
-* @augments Mesh
-*/
-var InstancedMesh = class extends Mesh {
-	/**
-	* Constructs a new instanced mesh.
-	*
-	* @param {BufferGeometry} [geometry] - The mesh geometry.
-	* @param {Material|Array<Material>} [material] - The mesh material.
-	* @param {number} count - The number of instances.
-	*/
-	constructor(geometry, material, count) {
-		super(geometry, material);
-		/**
-		* This flag can be used for type testing.
-		*
-		* @type {boolean}
-		* @readonly
-		* @default true
-		*/
-		this.isInstancedMesh = true;
-		/**
-		* Represents the local transformation of all instances. You have to set its
-		* {@link BufferAttribute#needsUpdate} flag to true if you modify instanced data
-		* via {@link InstancedMesh#setMatrixAt}.
-		*
-		* @type {InstancedBufferAttribute}
-		*/
-		this.instanceMatrix = new InstancedBufferAttribute(new Float32Array(count * 16), 16);
-		/**
-		* Represents the color of all instances. You have to set its
-		* {@link BufferAttribute#needsUpdate} flag to true if you modify instanced data
-		* via {@link InstancedMesh#setColorAt}.
-		*
-		* @type {?InstancedBufferAttribute}
-		* @default null
-		*/
-		this.instanceColor = null;
-		/**
-		* Represents the morph target weights of all instances. You have to set its
-		* {@link Texture#needsUpdate} flag to true if you modify instanced data
-		* via {@link InstancedMesh#setMorphAt}.
-		*
-		* @type {?DataTexture}
-		* @default null
-		*/
-		this.morphTexture = null;
-		/**
-		* The number of instances.
-		*
-		* @type {number}
-		*/
-		this.count = count;
-		/**
-		* The bounding box of the instanced mesh. Can be computed via {@link InstancedMesh#computeBoundingBox}.
-		*
-		* @type {?Box3}
-		* @default null
-		*/
-		this.boundingBox = null;
-		/**
-		* The bounding sphere of the instanced mesh. Can be computed via {@link InstancedMesh#computeBoundingSphere}.
-		*
-		* @type {?Sphere}
-		* @default null
-		*/
-		this.boundingSphere = null;
-		for (let i = 0; i < count; i++) this.setMatrixAt(i, _identity);
-	}
-	/**
-	* Computes the bounding box of the instanced mesh, and updates {@link InstancedMesh#boundingBox}.
-	* The bounding box is not automatically computed by the engine; this method must be called by your app.
-	* You may need to recompute the bounding box if an instance is transformed via {@link InstancedMesh#setMatrixAt}.
-	*/
-	computeBoundingBox() {
-		const geometry = this.geometry;
-		const count = this.count;
-		if (this.boundingBox === null) this.boundingBox = new Box3();
-		if (geometry.boundingBox === null) geometry.computeBoundingBox();
-		this.boundingBox.makeEmpty();
-		for (let i = 0; i < count; i++) {
-			this.getMatrixAt(i, _instanceLocalMatrix);
-			_box3.copy(geometry.boundingBox).applyMatrix4(_instanceLocalMatrix);
-			this.boundingBox.union(_box3);
-		}
-	}
-	/**
-	* Computes the bounding sphere of the instanced mesh, and updates {@link InstancedMesh#boundingSphere}
-	* The engine automatically computes the bounding sphere when it is needed, e.g., for ray casting or view frustum culling.
-	* You may need to recompute the bounding sphere if an instance is transformed via {@link InstancedMesh#setMatrixAt}.
-	*/
-	computeBoundingSphere() {
-		const geometry = this.geometry;
-		const count = this.count;
-		if (this.boundingSphere === null) this.boundingSphere = new Sphere();
-		if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
-		this.boundingSphere.makeEmpty();
-		for (let i = 0; i < count; i++) {
-			this.getMatrixAt(i, _instanceLocalMatrix);
-			_sphere$4.copy(geometry.boundingSphere).applyMatrix4(_instanceLocalMatrix);
-			this.boundingSphere.union(_sphere$4);
-		}
-	}
-	copy(source, recursive) {
-		super.copy(source, recursive);
-		this.instanceMatrix.copy(source.instanceMatrix);
-		if (source.morphTexture !== null) this.morphTexture = source.morphTexture.clone();
-		if (source.instanceColor !== null) this.instanceColor = source.instanceColor.clone();
-		this.count = source.count;
-		if (source.boundingBox !== null) this.boundingBox = source.boundingBox.clone();
-		if (source.boundingSphere !== null) this.boundingSphere = source.boundingSphere.clone();
-		return this;
-	}
-	/**
-	* Gets the color of the defined instance.
-	*
-	* @param {number} index - The instance index.
-	* @param {Color} color - The target object that is used to store the method's result.
-	* @return {Color} A reference to the target color.
-	*/
-	getColorAt(index, color) {
-		if (this.instanceColor === null) return color.setRGB(1, 1, 1);
-		else return color.fromArray(this.instanceColor.array, index * 3);
-	}
-	/**
-	* Gets the local transformation matrix of the defined instance.
-	*
-	* @param {number} index - The instance index.
-	* @param {Matrix4} matrix - The target object that is used to store the method's result.
-	* @return {Matrix4} A reference to the target matrix.
-	*/
-	getMatrixAt(index, matrix) {
-		return matrix.fromArray(this.instanceMatrix.array, index * 16);
-	}
-	/**
-	* Gets the morph target weights of the defined instance.
-	*
-	* @param {number} index - The instance index.
-	* @param {Mesh} object - The target object that is used to store the method's result.
-	*/
-	getMorphAt(index, object) {
-		const objectInfluences = object.morphTargetInfluences;
-		const array = this.morphTexture.source.data.data;
-		const dataIndex = index * (objectInfluences.length + 1) + 1;
-		for (let i = 0; i < objectInfluences.length; i++) objectInfluences[i] = array[dataIndex + i];
-	}
-	raycast(raycaster, intersects) {
-		const matrixWorld = this.matrixWorld;
-		const raycastTimes = this.count;
-		_mesh$1.geometry = this.geometry;
-		_mesh$1.material = this.material;
-		if (_mesh$1.material === void 0) return;
-		if (this.boundingSphere === null) this.computeBoundingSphere();
-		_sphere$4.copy(this.boundingSphere);
-		_sphere$4.applyMatrix4(matrixWorld);
-		if (raycaster.ray.intersectsSphere(_sphere$4) === false) return;
-		for (let instanceId = 0; instanceId < raycastTimes; instanceId++) {
-			this.getMatrixAt(instanceId, _instanceLocalMatrix);
-			_instanceWorldMatrix.multiplyMatrices(matrixWorld, _instanceLocalMatrix);
-			_mesh$1.matrixWorld = _instanceWorldMatrix;
-			_mesh$1.raycast(raycaster, _instanceIntersects);
-			for (let i = 0, l = _instanceIntersects.length; i < l; i++) {
-				const intersect = _instanceIntersects[i];
-				intersect.instanceId = instanceId;
-				intersect.object = this;
-				intersects.push(intersect);
-			}
-			_instanceIntersects.length = 0;
-		}
-	}
-	/**
-	* Sets the given color to the defined instance. Make sure you set the `needsUpdate` flag of
-	* {@link InstancedMesh#instanceColor} to `true` after updating all the colors.
-	*
-	* @param {number} index - The instance index.
-	* @param {Color} color - The instance color.
-	* @return {InstancedMesh} A reference to this instanced mesh.
-	*/
-	setColorAt(index, color) {
-		if (this.instanceColor === null) this.instanceColor = new InstancedBufferAttribute(new Float32Array(this.instanceMatrix.count * 3).fill(1), 3);
-		color.toArray(this.instanceColor.array, index * 3);
-		return this;
-	}
-	/**
-	* Sets the given local transformation matrix to the defined instance. Make sure you set the `needsUpdate` flag of
-	* {@link InstancedMesh#instanceMatrix} to `true` after updating all the matrices.
-	*
-	* @param {number} index - The instance index.
-	* @param {Matrix4} matrix - The local transformation.
-	* @return {InstancedMesh} A reference to this instanced mesh.
-	*/
-	setMatrixAt(index, matrix) {
-		matrix.toArray(this.instanceMatrix.array, index * 16);
-		return this;
-	}
-	/**
-	* Sets the morph target weights to the defined instance. Make sure you set the `needsUpdate` flag of
-	* {@link InstancedMesh#morphTexture} to `true` after updating all the influences.
-	*
-	* @param {number} index - The instance index.
-	* @param {Mesh} object -  A mesh which `morphTargetInfluences` property containing the morph target weights
-	* of a single instance.
-	* @return {InstancedMesh} A reference to this instanced mesh.
-	*/
-	setMorphAt(index, object) {
-		const objectInfluences = object.morphTargetInfluences;
-		const len = objectInfluences.length + 1;
-		if (this.morphTexture === null) this.morphTexture = new DataTexture(new Float32Array(len * this.count), len, this.count, RedFormat, FloatType);
-		const array = this.morphTexture.source.data.data;
-		let morphInfluencesSum = 0;
-		for (let i = 0; i < objectInfluences.length; i++) morphInfluencesSum += objectInfluences[i];
-		const morphBaseInfluence = this.geometry.morphTargetsRelative ? 1 : 1 - morphInfluencesSum;
-		const dataIndex = len * index;
-		array[dataIndex] = morphBaseInfluence;
-		array.set(objectInfluences, dataIndex + 1);
-		return this;
-	}
-	updateMorphTargets() {}
-	/**
-	* Frees the GPU-related resources allocated by this instance. Call this
-	* method whenever this instance is no longer used in your app.
-	*/
-	dispose() {
-		this.dispatchEvent({ type: "dispose" });
-		if (this.morphTexture !== null) {
-			this.morphTexture.dispose();
-			this.morphTexture = null;
-		}
-	}
-};
 var _vector1 = /*@__PURE__*/ new Vector3();
 var _vector2 = /*@__PURE__*/ new Vector3();
 var _normalMatrix = /*@__PURE__*/ new Matrix3();
@@ -15535,6 +15245,344 @@ var Frustum = class {
 	*/
 	clone() {
 		return new this.constructor().copy(this);
+	}
+};
+/**
+* A material for rendering line primitives.
+*
+* Materials define the appearance of renderable 3D objects.
+*
+* ```js
+* const material = new THREE.LineBasicMaterial( { color: 0xffffff } );
+* ```
+*
+* @augments Material
+*/
+var LineBasicMaterial = class extends Material {
+	/**
+	* Constructs a new line basic material.
+	*
+	* @param {Object} [parameters] - An object with one or more properties
+	* defining the material's appearance. Any property of the material
+	* (including any property from inherited materials) can be passed
+	* in here. Color values can be passed any type of value accepted
+	* by {@link Color#set}.
+	*/
+	constructor(parameters) {
+		super();
+		/**
+		* This flag can be used for type testing.
+		*
+		* @type {boolean}
+		* @readonly
+		* @default true
+		*/
+		this.isLineBasicMaterial = true;
+		this.type = "LineBasicMaterial";
+		/**
+		* Color of the material.
+		*
+		* @type {Color}
+		* @default (1,1,1)
+		*/
+		this.color = new Color(16777215);
+		/**
+		* Sets the color of the lines using data from a texture. The texture map
+		* color is modulated by the diffuse `color`.
+		*
+		* `map` represents color data, and the texture must be assigned a
+		* {@link Texture#colorSpace}. Most `map` textures set
+		* `texture.colorSpace = SRGBColorSpace`.
+		*
+		* @type {?Texture}
+		* @default null
+		*/
+		this.map = null;
+		/**
+		* Controls line thickness or lines.
+		*
+		* Can only be used with {@link SVGRenderer}. WebGL and WebGPU
+		* ignore this setting and always render line primitives with a
+		* width of one pixel.
+		*
+		* @type {number}
+		* @default 1
+		*/
+		this.linewidth = 1;
+		/**
+		* Defines appearance of line ends.
+		*
+		* Can only be used with {@link SVGRenderer}.
+		*
+		* @type {('butt'|'round'|'square')}
+		* @default 'round'
+		*/
+		this.linecap = "round";
+		/**
+		* Defines appearance of line joints.
+		*
+		* Can only be used with {@link SVGRenderer}.
+		*
+		* @type {('round'|'bevel'|'miter')}
+		* @default 'round'
+		*/
+		this.linejoin = "round";
+		/**
+		* Whether the material is affected by fog or not.
+		*
+		* @type {boolean}
+		* @default true
+		*/
+		this.fog = true;
+		this.setValues(parameters);
+	}
+	copy(source) {
+		super.copy(source);
+		this.color.copy(source.color);
+		this.map = source.map;
+		this.linewidth = source.linewidth;
+		this.linecap = source.linecap;
+		this.linejoin = source.linejoin;
+		this.fog = source.fog;
+		return this;
+	}
+};
+var _vStart = /*@__PURE__*/ new Vector3();
+var _vEnd = /*@__PURE__*/ new Vector3();
+var _inverseMatrix$1 = /*@__PURE__*/ new Matrix4();
+var _ray$1 = /*@__PURE__*/ new Ray();
+var _sphere$1 = /*@__PURE__*/ new Sphere();
+var _intersectPointOnRay = /*@__PURE__*/ new Vector3();
+var _intersectPointOnSegment = /*@__PURE__*/ new Vector3();
+/**
+* A continuous line. The line are rendered by connecting consecutive
+* vertices with straight lines.
+*
+* ```js
+* const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
+*
+* const points = [];
+* points.push( new THREE.Vector3( - 10, 0, 0 ) );
+* points.push( new THREE.Vector3( 0, 10, 0 ) );
+* points.push( new THREE.Vector3( 10, 0, 0 ) );
+*
+* const geometry = new THREE.BufferGeometry().setFromPoints( points );
+*
+* const line = new THREE.Line( geometry, material );
+* scene.add( line );
+* ```
+*
+* @augments Object3D
+*/
+var Line = class extends Object3D {
+	/**
+	* Constructs a new line.
+	*
+	* @param {BufferGeometry} [geometry] - The line geometry.
+	* @param {Material|Array<Material>} [material] - The line material.
+	*/
+	constructor(geometry = new BufferGeometry(), material = new LineBasicMaterial()) {
+		super();
+		/**
+		* This flag can be used for type testing.
+		*
+		* @type {boolean}
+		* @readonly
+		* @default true
+		*/
+		this.isLine = true;
+		this.type = "Line";
+		/**
+		* The line geometry.
+		*
+		* @type {BufferGeometry}
+		*/
+		this.geometry = geometry;
+		/**
+		* The line material.
+		*
+		* @type {Material|Array<Material>}
+		* @default LineBasicMaterial
+		*/
+		this.material = material;
+		/**
+		* A dictionary representing the morph targets in the geometry. The key is the
+		* morph targets name, the value its attribute index. This member is `undefined`
+		* by default and only set when morph targets are detected in the geometry.
+		*
+		* @type {Object<string,number>|undefined}
+		* @default undefined
+		*/
+		this.morphTargetDictionary = void 0;
+		/**
+		* An array of weights typically in the range `[0,1]` that specify how much of the morph
+		* is applied. This member is `undefined` by default and only set when morph targets are
+		* detected in the geometry.
+		*
+		* @type {Array<number>|undefined}
+		* @default undefined
+		*/
+		this.morphTargetInfluences = void 0;
+		this.updateMorphTargets();
+	}
+	copy(source, recursive) {
+		super.copy(source, recursive);
+		this.material = Array.isArray(source.material) ? source.material.slice() : source.material;
+		this.geometry = source.geometry;
+		return this;
+	}
+	/**
+	* Computes an array of distance values which are necessary for rendering dashed lines.
+	* For each vertex in the geometry, the method calculates the cumulative length from the
+	* current point to the very beginning of the line.
+	*
+	* @return {Line} A reference to this line.
+	*/
+	computeLineDistances() {
+		const geometry = this.geometry;
+		if (geometry.index === null) {
+			const positionAttribute = geometry.attributes.position;
+			const lineDistances = [0];
+			for (let i = 1, l = positionAttribute.count; i < l; i++) {
+				_vStart.fromBufferAttribute(positionAttribute, i - 1);
+				_vEnd.fromBufferAttribute(positionAttribute, i);
+				lineDistances[i] = lineDistances[i - 1];
+				lineDistances[i] += _vStart.distanceTo(_vEnd);
+			}
+			geometry.setAttribute("lineDistance", new Float32BufferAttribute(lineDistances, 1));
+		} else warn("Line.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.");
+		return this;
+	}
+	/**
+	* Computes intersection points between a casted ray and this line.
+	*
+	* @param {Raycaster} raycaster - The raycaster.
+	* @param {Array<Object>} intersects - The target array that holds the intersection points.
+	*/
+	raycast(raycaster, intersects) {
+		const geometry = this.geometry;
+		const matrixWorld = this.matrixWorld;
+		const threshold = raycaster.params.Line.threshold;
+		const drawRange = geometry.drawRange;
+		if (geometry.boundingSphere === null) geometry.computeBoundingSphere();
+		_sphere$1.copy(geometry.boundingSphere);
+		_sphere$1.applyMatrix4(matrixWorld);
+		_sphere$1.radius += threshold;
+		if (raycaster.ray.intersectsSphere(_sphere$1) === false) return;
+		_inverseMatrix$1.copy(matrixWorld).invert();
+		_ray$1.copy(raycaster.ray).applyMatrix4(_inverseMatrix$1);
+		const localThreshold = threshold / ((this.scale.x + this.scale.y + this.scale.z) / 3);
+		const localThresholdSq = localThreshold * localThreshold;
+		const step = this.isLineSegments ? 2 : 1;
+		const index = geometry.index;
+		const positionAttribute = geometry.attributes.position;
+		if (index !== null) {
+			const start = Math.max(0, drawRange.start);
+			const end = Math.min(index.count, drawRange.start + drawRange.count);
+			for (let i = start, l = end - 1; i < l; i += step) {
+				const a = index.getX(i);
+				const b = index.getX(i + 1);
+				const intersect = checkIntersection(this, raycaster, _ray$1, localThresholdSq, a, b, i);
+				if (intersect) intersects.push(intersect);
+			}
+			if (this.isLineLoop) {
+				const a = index.getX(end - 1);
+				const b = index.getX(start);
+				const intersect = checkIntersection(this, raycaster, _ray$1, localThresholdSq, a, b, end - 1);
+				if (intersect) intersects.push(intersect);
+			}
+		} else {
+			const start = Math.max(0, drawRange.start);
+			const end = Math.min(positionAttribute.count, drawRange.start + drawRange.count);
+			for (let i = start, l = end - 1; i < l; i += step) {
+				const intersect = checkIntersection(this, raycaster, _ray$1, localThresholdSq, i, i + 1, i);
+				if (intersect) intersects.push(intersect);
+			}
+			if (this.isLineLoop) {
+				const intersect = checkIntersection(this, raycaster, _ray$1, localThresholdSq, end - 1, start, end - 1);
+				if (intersect) intersects.push(intersect);
+			}
+		}
+	}
+	/**
+	* Sets the values of {@link Line#morphTargetDictionary} and {@link Line#morphTargetInfluences}
+	* to make sure existing morph targets can influence this 3D object.
+	*/
+	updateMorphTargets() {
+		const morphAttributes = this.geometry.morphAttributes;
+		const keys = Object.keys(morphAttributes);
+		if (keys.length > 0) {
+			const morphAttribute = morphAttributes[keys[0]];
+			if (morphAttribute !== void 0) {
+				this.morphTargetInfluences = [];
+				this.morphTargetDictionary = {};
+				for (let m = 0, ml = morphAttribute.length; m < ml; m++) {
+					const name = morphAttribute[m].name || String(m);
+					this.morphTargetInfluences.push(0);
+					this.morphTargetDictionary[name] = m;
+				}
+			}
+		}
+	}
+};
+function checkIntersection(object, raycaster, ray, thresholdSq, a, b, i) {
+	const positionAttribute = object.geometry.attributes.position;
+	_vStart.fromBufferAttribute(positionAttribute, a);
+	_vEnd.fromBufferAttribute(positionAttribute, b);
+	if (ray.distanceSqToSegment(_vStart, _vEnd, _intersectPointOnRay, _intersectPointOnSegment) > thresholdSq) return;
+	_intersectPointOnRay.applyMatrix4(object.matrixWorld);
+	const distance = raycaster.ray.origin.distanceTo(_intersectPointOnRay);
+	if (distance < raycaster.near || distance > raycaster.far) return;
+	return {
+		distance,
+		point: _intersectPointOnSegment.clone().applyMatrix4(object.matrixWorld),
+		index: i,
+		face: null,
+		faceIndex: null,
+		barycoord: null,
+		object
+	};
+}
+var _start = /*@__PURE__*/ new Vector3();
+var _end = /*@__PURE__*/ new Vector3();
+/**
+* A series of lines drawn between pairs of vertices.
+*
+* @augments Line
+*/
+var LineSegments = class extends Line {
+	/**
+	* Constructs a new line segments.
+	*
+	* @param {BufferGeometry} [geometry] - The line geometry.
+	* @param {Material|Array<Material>} [material] - The line material.
+	*/
+	constructor(geometry, material) {
+		super(geometry, material);
+		/**
+		* This flag can be used for type testing.
+		*
+		* @type {boolean}
+		* @readonly
+		* @default true
+		*/
+		this.isLineSegments = true;
+		this.type = "LineSegments";
+	}
+	computeLineDistances() {
+		const geometry = this.geometry;
+		if (geometry.index === null) {
+			const positionAttribute = geometry.attributes.position;
+			const lineDistances = [];
+			for (let i = 0, l = positionAttribute.count; i < l; i += 2) {
+				_start.fromBufferAttribute(positionAttribute, i);
+				_end.fromBufferAttribute(positionAttribute, i + 1);
+				lineDistances[i] = i === 0 ? 0 : lineDistances[i - 1];
+				lineDistances[i + 1] = lineDistances[i] + _start.distanceTo(_end);
+			}
+			geometry.setAttribute("lineDistance", new Float32BufferAttribute(lineDistances, 1));
+		} else warn("LineSegments.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.");
+		return this;
 	}
 };
 /**
@@ -16184,6 +16232,178 @@ var CylinderGeometry = class CylinderGeometry extends BufferGeometry {
 	*/
 	static fromJSON(data) {
 		return new CylinderGeometry(data.radiusTop, data.radiusBottom, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+	}
+};
+/**
+* A geometry class for representing a cone.
+*
+* ```js
+* const geometry = new THREE.ConeGeometry( 5, 20, 32 );
+* const material = new THREE.MeshBasicMaterial( { color: 0xffff00 } );
+* const cone = new THREE.Mesh(geometry, material );
+* scene.add( cone );
+* ```
+*
+* @augments CylinderGeometry
+* @demo scenes/geometry-browser.html#ConeGeometry
+*/
+var ConeGeometry = class ConeGeometry extends CylinderGeometry {
+	/**
+	* Constructs a new cone geometry.
+	*
+	* @param {number} [radius=1] - Radius of the cone base.
+	* @param {number} [height=1] - Height of the cone.
+	* @param {number} [radialSegments=32] - Number of segmented faces around the circumference of the cone.
+	* @param {number} [heightSegments=1] - Number of rows of faces along the height of the cone.
+	* @param {boolean} [openEnded=false] - Whether the base of the cone is open or capped.
+	* @param {number} [thetaStart=0] - Start angle for first segment, in radians.
+	* @param {number} [thetaLength=Math.PI*2] - The central angle, often called theta, of the circular sector, in radians.
+	* The default value results in a complete cone.
+	*/
+	constructor(radius = 1, height = 1, radialSegments = 32, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = Math.PI * 2) {
+		super(0, radius, height, radialSegments, heightSegments, openEnded, thetaStart, thetaLength);
+		this.type = "ConeGeometry";
+		/**
+		* Holds the constructor parameters that have been
+		* used to generate the geometry. Any modification
+		* after instantiation does not change the geometry.
+		*
+		* @type {Object}
+		*/
+		this.parameters = {
+			radius,
+			height,
+			radialSegments,
+			heightSegments,
+			openEnded,
+			thetaStart,
+			thetaLength
+		};
+	}
+	/**
+	* Factory method for creating an instance of this class from the given
+	* JSON object.
+	*
+	* @param {Object} data - A JSON object representing the serialized geometry.
+	* @return {ConeGeometry} A new instance.
+	*/
+	static fromJSON(data) {
+		return new ConeGeometry(data.radius, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+	}
+};
+var _v0$3 = /*@__PURE__*/ new Vector3();
+var _v1$1 = /*@__PURE__*/ new Vector3();
+var _normal = /*@__PURE__*/ new Vector3();
+var _triangle = /*@__PURE__*/ new Triangle();
+/**
+* Can be used as a helper object to view the edges of a geometry.
+*
+* ```js
+* const geometry = new THREE.BoxGeometry();
+* const edges = new THREE.EdgesGeometry( geometry );
+* const line = new THREE.LineSegments( edges );
+* scene.add( line );
+* ```
+*
+* Note: It is not yet possible to serialize/deserialize instances of this class.
+*
+* @augments BufferGeometry
+*/
+var EdgesGeometry = class extends BufferGeometry {
+	/**
+	* Constructs a new edges geometry.
+	*
+	* @param {?BufferGeometry} [geometry=null] - The geometry.
+	* @param {number} [thresholdAngle=1] - An edge is only rendered if the angle (in degrees)
+	* between the face normals of the adjoining faces exceeds this value.
+	*/
+	constructor(geometry = null, thresholdAngle = 1) {
+		super();
+		this.type = "EdgesGeometry";
+		/**
+		* Holds the constructor parameters that have been
+		* used to generate the geometry. Any modification
+		* after instantiation does not change the geometry.
+		*
+		* @type {Object}
+		*/
+		this.parameters = {
+			geometry,
+			thresholdAngle
+		};
+		if (geometry !== null) {
+			const precision = Math.pow(10, 4);
+			const thresholdDot = Math.cos(DEG2RAD * thresholdAngle);
+			const indexAttr = geometry.getIndex();
+			const positionAttr = geometry.getAttribute("position");
+			const indexCount = indexAttr ? indexAttr.count : positionAttr.count;
+			const indexArr = [
+				0,
+				0,
+				0
+			];
+			const vertKeys = [
+				"a",
+				"b",
+				"c"
+			];
+			const hashes = new Array(3);
+			const edgeData = {};
+			const vertices = [];
+			for (let i = 0; i < indexCount; i += 3) {
+				if (indexAttr) {
+					indexArr[0] = indexAttr.getX(i);
+					indexArr[1] = indexAttr.getX(i + 1);
+					indexArr[2] = indexAttr.getX(i + 2);
+				} else {
+					indexArr[0] = i;
+					indexArr[1] = i + 1;
+					indexArr[2] = i + 2;
+				}
+				const { a, b, c } = _triangle;
+				a.fromBufferAttribute(positionAttr, indexArr[0]);
+				b.fromBufferAttribute(positionAttr, indexArr[1]);
+				c.fromBufferAttribute(positionAttr, indexArr[2]);
+				_triangle.getNormal(_normal);
+				hashes[0] = `${Math.round(a.x * precision)},${Math.round(a.y * precision)},${Math.round(a.z * precision)}`;
+				hashes[1] = `${Math.round(b.x * precision)},${Math.round(b.y * precision)},${Math.round(b.z * precision)}`;
+				hashes[2] = `${Math.round(c.x * precision)},${Math.round(c.y * precision)},${Math.round(c.z * precision)}`;
+				if (hashes[0] === hashes[1] || hashes[1] === hashes[2] || hashes[2] === hashes[0]) continue;
+				for (let j = 0; j < 3; j++) {
+					const jNext = (j + 1) % 3;
+					const vecHash0 = hashes[j];
+					const vecHash1 = hashes[jNext];
+					const v0 = _triangle[vertKeys[j]];
+					const v1 = _triangle[vertKeys[jNext]];
+					const hash = `${vecHash0}_${vecHash1}`;
+					const reverseHash = `${vecHash1}_${vecHash0}`;
+					if (reverseHash in edgeData && edgeData[reverseHash]) {
+						if (_normal.dot(edgeData[reverseHash].normal) <= thresholdDot) {
+							vertices.push(v0.x, v0.y, v0.z);
+							vertices.push(v1.x, v1.y, v1.z);
+						}
+						edgeData[reverseHash] = null;
+					} else if (!(hash in edgeData)) edgeData[hash] = {
+						index0: indexArr[j],
+						index1: indexArr[jNext],
+						normal: _normal.clone()
+					};
+				}
+			}
+			for (const key in edgeData) if (edgeData[key]) {
+				const { index0, index1 } = edgeData[key];
+				_v0$3.fromBufferAttribute(positionAttr, index0);
+				_v1$1.fromBufferAttribute(positionAttr, index1);
+				vertices.push(_v0$3.x, _v0$3.y, _v0$3.z);
+				vertices.push(_v1$1.x, _v1$1.y, _v1$1.z);
+			}
+			this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+		}
+	}
+	copy(source) {
+		super.copy(source);
+		this.parameters = Object.assign({}, source.parameters);
+		return this;
 	}
 };
 /**
@@ -19088,6 +19308,104 @@ var PlaneGeometry = class PlaneGeometry extends BufferGeometry {
 	}
 };
 /**
+* A class for generating a two-dimensional ring geometry.
+*
+* ```js
+* const geometry = new THREE.RingGeometry( 1, 5, 32 );
+* const material = new THREE.MeshBasicMaterial( { color: 0xffff00, side: THREE.DoubleSide } );
+* const mesh = new THREE.Mesh( geometry, material );
+* scene.add( mesh );
+* ```
+*
+* @augments BufferGeometry
+* @demo scenes/geometry-browser.html#RingGeometry
+*/
+var RingGeometry = class RingGeometry extends BufferGeometry {
+	/**
+	* Constructs a new ring geometry.
+	*
+	* @param {number} [innerRadius=0.5] - The inner radius of the ring.
+	* @param {number} [outerRadius=1] - The outer radius of the ring.
+	* @param {number} [thetaSegments=32] - Number of segments. A higher number means the ring will be more round. Minimum is `3`.
+	* @param {number} [phiSegments=1] - Number of segments per ring segment. Minimum is `1`.
+	* @param {number} [thetaStart=0] - Starting angle in radians.
+	* @param {number} [thetaLength=Math.PI*2] - Central angle in radians.
+	*/
+	constructor(innerRadius = .5, outerRadius = 1, thetaSegments = 32, phiSegments = 1, thetaStart = 0, thetaLength = Math.PI * 2) {
+		super();
+		this.type = "RingGeometry";
+		/**
+		* Holds the constructor parameters that have been
+		* used to generate the geometry. Any modification
+		* after instantiation does not change the geometry.
+		*
+		* @type {Object}
+		*/
+		this.parameters = {
+			innerRadius,
+			outerRadius,
+			thetaSegments,
+			phiSegments,
+			thetaStart,
+			thetaLength
+		};
+		thetaSegments = Math.max(3, thetaSegments);
+		phiSegments = Math.max(1, phiSegments);
+		const indices = [];
+		const vertices = [];
+		const normals = [];
+		const uvs = [];
+		let radius = innerRadius;
+		const radiusStep = (outerRadius - innerRadius) / phiSegments;
+		const vertex = new Vector3();
+		const uv = new Vector2();
+		for (let j = 0; j <= phiSegments; j++) {
+			for (let i = 0; i <= thetaSegments; i++) {
+				const segment = thetaStart + i / thetaSegments * thetaLength;
+				vertex.x = radius * Math.cos(segment);
+				vertex.y = radius * Math.sin(segment);
+				vertices.push(vertex.x, vertex.y, vertex.z);
+				normals.push(0, 0, 1);
+				uv.x = (vertex.x / outerRadius + 1) / 2;
+				uv.y = (vertex.y / outerRadius + 1) / 2;
+				uvs.push(uv.x, uv.y);
+			}
+			radius += radiusStep;
+		}
+		for (let j = 0; j < phiSegments; j++) {
+			const thetaSegmentLevel = j * (thetaSegments + 1);
+			for (let i = 0; i < thetaSegments; i++) {
+				const segment = i + thetaSegmentLevel;
+				const a = segment;
+				const b = segment + thetaSegments + 1;
+				const c = segment + thetaSegments + 2;
+				const d = segment + 1;
+				indices.push(a, b, d);
+				indices.push(b, c, d);
+			}
+		}
+		this.setIndex(indices);
+		this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+		this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+		this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+	}
+	copy(source) {
+		super.copy(source);
+		this.parameters = Object.assign({}, source.parameters);
+		return this;
+	}
+	/**
+	* Factory method for creating an instance of this class from the given
+	* JSON object.
+	*
+	* @param {Object} data - A JSON object representing the serialized geometry.
+	* @return {RingGeometry} A new instance.
+	*/
+	static fromJSON(data) {
+		return new RingGeometry(data.innerRadius, data.outerRadius, data.thetaSegments, data.phiSegments, data.thetaStart, data.thetaLength);
+	}
+};
+/**
 * Provides utility functions for managing uniforms.
 *
 * @module UniformsUtils
@@ -20383,383 +20701,6 @@ var MeshPhysicalMaterial = class extends MeshStandardMaterial {
 		this.specularIntensityMap = source.specularIntensityMap;
 		this.specularColor.copy(source.specularColor);
 		this.specularColorMap = source.specularColorMap;
-		return this;
-	}
-};
-/**
-* A material for non-shiny surfaces, without specular highlights.
-*
-* The material uses a non-physically based [Lambertian](https://en.wikipedia.org/wiki/Lambertian_reflectance)
-* model for calculating reflectance. This can simulate some surfaces (such
-* as untreated wood or stone) well, but cannot simulate shiny surfaces with
-* specular highlights (such as varnished wood). `MeshLambertMaterial` uses per-fragment
-* shading.
-*
-* Due to the simplicity of the reflectance and illumination models,
-* performance will be greater when using this material over the
-* {@link MeshPhongMaterial}, {@link MeshStandardMaterial} or
-* {@link MeshPhysicalMaterial}, at the cost of some graphical accuracy.
-*
-* @augments Material
-* @demo scenes/material-browser.html#MeshLambertMaterial
-*/
-var MeshLambertMaterial = class extends Material {
-	/**
-	* Constructs a new mesh lambert material.
-	*
-	* @param {Object} [parameters] - An object with one or more properties
-	* defining the material's appearance. Any property of the material
-	* (including any property from inherited materials) can be passed
-	* in here. Color values can be passed any type of value accepted
-	* by {@link Color#set}.
-	*/
-	constructor(parameters) {
-		super();
-		/**
-		* This flag can be used for type testing.
-		*
-		* @type {boolean}
-		* @readonly
-		* @default true
-		*/
-		this.isMeshLambertMaterial = true;
-		this.type = "MeshLambertMaterial";
-		/**
-		* Color of the material.
-		*
-		* @type {Color}
-		* @default (1,1,1)
-		*/
-		this.color = new Color(16777215);
-		/**
-		* The color map. May optionally include an alpha channel, typically combined
-		* with {@link Material#transparent} or {@link Material#alphaTest}. The texture map
-		* color is modulated by the diffuse `color`.
-		*
-		* `map` represents color data, and the texture must be assigned a
-		* {@link Texture#colorSpace}. Most `map` textures set
-		* `texture.colorSpace = SRGBColorSpace`.
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.map = null;
-		/**
-		* The light map. Requires a second set of UVs.
-		*
-		* `lightMap` represents pre-baked illuminance data, and the texture must be assigned
-		* a {@link Texture#colorSpace}. Most `lightMap` textures set
-		* `texture.colorSpace = LinearSRGBColorSpace` and use float-type formats
-		* such as `.exr` or `.hdr`.
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.lightMap = null;
-		/**
-		* Intensity of the baked light.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.lightMapIntensity = 1;
-		/**
-		* The red channel of this texture is used as the ambient occlusion map.
-		* Requires a second set of UVs.
-		*
-		* `aoMap` represents non-color data. Any texture assigned must have
-		* `texture.colorSpace = NoColorSpace` (default).
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.aoMap = null;
-		/**
-		* Intensity of the ambient occlusion effect. Range is `[0,1]`, where `0`
-		* disables ambient occlusion. Where intensity is `1` and the AO map's
-		* red channel is also `1`, ambient light is fully occluded on a surface.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.aoMapIntensity = 1;
-		/**
-		* Emissive (light) color of the material, essentially a solid color
-		* unaffected by other lighting.
-		*
-		* @type {Color}
-		* @default (0,0,0)
-		*/
-		this.emissive = new Color(0);
-		/**
-		* Intensity of the emissive light. Modulates the emissive color.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.emissiveIntensity = 1;
-		/**
-		* Set emissive (glow) map. The emissive map color is modulated by the
-		* emissive color and the emissive intensity. If you have an emissive map,
-		* be sure to set the emissive color to something other than black.
-		*
-		* `emissiveMap` represents color data, and the texture must be assigned a
-		* {@link Texture#colorSpace}. Most `emissiveMap` textures set
-		* `texture.colorSpace = SRGBColorSpace`.
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.emissiveMap = null;
-		/**
-		* The texture to create a bump map. The black and white values map to the
-		* perceived depth in relation to the lights. Bump doesn't actually affect
-		* the geometry of the object, only the lighting. If a normal map is defined
-		* this will be ignored.
-		*
-		* `bumpMap` represents non-color data. Any texture assigned must have
-		* `texture.colorSpace = NoColorSpace` (default).
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.bumpMap = null;
-		/**
-		* How much the bump map affects the material. Typical range is `[0,1]`.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.bumpScale = 1;
-		/**
-		* The texture to create a normal map. The RGB values affect the surface
-		* normal for each pixel fragment and change the way the color is lit. Normal
-		* maps do not change the actual shape of the surface, only the lighting. In
-		* case the material has a normal map authored using the left handed
-		* convention, the `y` component of `normalScale` should be negated to compensate
-		* for the different handedness.
-		*
-		* `normalMap` represents non-color data. Any texture assigned must have
-		* `texture.colorSpace = NoColorSpace` (default).
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.normalMap = null;
-		/**
-		* The type of normal map.
-		*
-		* @type {(TangentSpaceNormalMap|ObjectSpaceNormalMap)}
-		* @default TangentSpaceNormalMap
-		*/
-		this.normalMapType = 0;
-		/**
-		* How much the normal map affects the material. Typical value range is `[0,1]`.
-		*
-		* @type {Vector2}
-		* @default (1,1)
-		*/
-		this.normalScale = new Vector2(1, 1);
-		/**
-		* The displacement map affects the position of the mesh's vertices. Unlike
-		* other maps which only affect the light and shade of the material the
-		* displaced vertices can cast shadows, block other objects, and otherwise
-		* act as real geometry. The displacement texture is an image where the value
-		* of each pixel (white being the highest) is mapped against, and
-		* repositions, the vertices of the mesh. For best results, pair a
-		* displacement map with a matching normal map, since the renderer can
-		* not recompute surface normals from the displaced vertices.
-		*
-		* `displacementMap` represents non-color data. Any texture assigned must have
-		* `texture.colorSpace = NoColorSpace` (default).
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.displacementMap = null;
-		/**
-		* How much the displacement map affects the mesh (where black is no
-		* displacement, and white is maximum displacement). Without a displacement
-		* map set, this value is not applied.
-		*
-		* @type {number}
-		* @default 0
-		*/
-		this.displacementScale = 1;
-		/**
-		* The offset of the displacement map's values on the mesh's vertices.
-		* The bias is added to the scaled sample of the displacement map.
-		* Without a displacement map set, this value is not applied.
-		*
-		* @type {number}
-		* @default 0
-		*/
-		this.displacementBias = 0;
-		/**
-		* Specular map used by the material.
-		*
-		* `specularMap` represents color data, and the texture must be assigned a
-		* {@link Texture#colorSpace}. Most `specularMap` textures set
-		* `texture.colorSpace = SRGBColorSpace`.
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.specularMap = null;
-		/**
-		* The alpha map is a grayscale texture that controls the opacity across the
-		* surface (black: fully transparent; white: fully opaque).
-		*
-		* Only the color of the texture is used, ignoring the alpha channel if one
-		* exists. For RGB and RGBA textures, the renderer will use the green channel
-		* when sampling this texture due to the extra bit of precision provided for
-		* green in DXT-compressed and uncompressed RGB 565 formats. Luminance-only and
-		* luminance/alpha textures will also still work as expected.
-		*
-		* `alphaMap` represents non-color data. Any texture assigned must have
-		* `texture.colorSpace = NoColorSpace` (default).
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.alphaMap = null;
-		/**
-		* The environment map.
-		*
-		* `envMap` represents luminance data, and the texture must be assigned
-		* a {@link Texture#colorSpace}. Most `envMap` textures set
-		* `texture.colorSpace = LinearSRGBColorSpace` and use float-type formats
-		* such as `.exr` or `.hdr`.
-		*
-		* @type {?Texture}
-		* @default null
-		*/
-		this.envMap = null;
-		/**
-		* The rotation of the environment map in radians.
-		*
-		* @type {Euler}
-		* @default (0,0,0)
-		*/
-		this.envMapRotation = new Euler();
-		/**
-		* How to combine the result of the surface's color with the environment map, if any.
-		*
-		* When set to `MixOperation`, the {@link MeshBasicMaterial#reflectivity} is used to
-		* blend between the two colors.
-		*
-		* @type {(MultiplyOperation|MixOperation|AddOperation)}
-		* @default MultiplyOperation
-		*/
-		this.combine = 0;
-		/**
-		* How much the environment map affects the surface.
-		* The valid range is between `0` (no reflections) and `1` (full reflections).
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.reflectivity = 1;
-		/**
-		* Scales the effect of the environment map by multiplying its color.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.envMapIntensity = 1;
-		/**
-		* The index of refraction (IOR) of air (approximately 1) divided by the
-		* index of refraction of the material. It is used with environment mapping
-		* modes {@link CubeRefractionMapping} and {@link EquirectangularRefractionMapping}.
-		* The refraction ratio should not exceed `1`.
-		*
-		* @type {number}
-		* @default 0.98
-		*/
-		this.refractionRatio = .98;
-		/**
-		* Renders the geometry as a wireframe.
-		*
-		* @type {boolean}
-		* @default false
-		*/
-		this.wireframe = false;
-		/**
-		* Controls the thickness of the wireframe.
-		*
-		* Can only be used with {@link SVGRenderer}.
-		*
-		* @type {number}
-		* @default 1
-		*/
-		this.wireframeLinewidth = 1;
-		/**
-		* Defines appearance of wireframe ends.
-		*
-		* Can only be used with {@link SVGRenderer}.
-		*
-		* @type {('round'|'bevel'|'miter')}
-		* @default 'round'
-		*/
-		this.wireframeLinecap = "round";
-		/**
-		* Defines appearance of wireframe joints.
-		*
-		* Can only be used with {@link SVGRenderer}.
-		*
-		* @type {('round'|'bevel'|'miter')}
-		* @default 'round'
-		*/
-		this.wireframeLinejoin = "round";
-		/**
-		* Whether the material is rendered with flat shading or not.
-		*
-		* @type {boolean}
-		* @default false
-		*/
-		this.flatShading = false;
-		/**
-		* Whether the material is affected by fog or not.
-		*
-		* @type {boolean}
-		* @default true
-		*/
-		this.fog = true;
-		this.setValues(parameters);
-	}
-	copy(source) {
-		super.copy(source);
-		this.color.copy(source.color);
-		this.map = source.map;
-		this.lightMap = source.lightMap;
-		this.lightMapIntensity = source.lightMapIntensity;
-		this.aoMap = source.aoMap;
-		this.aoMapIntensity = source.aoMapIntensity;
-		this.emissive.copy(source.emissive);
-		this.emissiveMap = source.emissiveMap;
-		this.emissiveIntensity = source.emissiveIntensity;
-		this.bumpMap = source.bumpMap;
-		this.bumpScale = source.bumpScale;
-		this.normalMap = source.normalMap;
-		this.normalMapType = source.normalMapType;
-		this.normalScale.copy(source.normalScale);
-		this.displacementMap = source.displacementMap;
-		this.displacementScale = source.displacementScale;
-		this.displacementBias = source.displacementBias;
-		this.specularMap = source.specularMap;
-		this.alphaMap = source.alphaMap;
-		this.envMap = source.envMap;
-		this.envMapRotation.copy(source.envMapRotation);
-		this.combine = source.combine;
-		this.reflectivity = source.reflectivity;
-		this.envMapIntensity = source.envMapIntensity;
-		this.refractionRatio = source.refractionRatio;
-		this.wireframe = source.wireframe;
-		this.wireframeLinewidth = source.wireframeLinewidth;
-		this.wireframeLinecap = source.wireframeLinecap;
-		this.wireframeLinejoin = source.wireframeLinejoin;
-		this.flatShading = source.flatShading;
-		this.fog = source.fog;
 		return this;
 	}
 };
@@ -23293,119 +23234,6 @@ var PerspectiveCamera = class extends Camera {
 	}
 };
 /**
-* Represents the shadow configuration of point lights.
-*
-* @augments LightShadow
-*/
-var PointLightShadow = class extends LightShadow {
-	/**
-	* Constructs a new point light shadow.
-	*/
-	constructor() {
-		super(new PerspectiveCamera(90, 1, .5, 500));
-		/**
-		* This flag can be used for type testing.
-		*
-		* @type {boolean}
-		* @readonly
-		* @default true
-		*/
-		this.isPointLightShadow = true;
-	}
-};
-/**
-* A light that gets emitted from a single point in all directions. A common
-* use case for this is to replicate the light emitted from a bare
-* lightbulb.
-*
-* This light can cast shadows - see the {@link PointLightShadow} for details.
-*
-* ```js
-* const light = new THREE.PointLight( 0xff0000, 1, 100 );
-* light.position.set( 50, 50, 50 );
-* scene.add( light );
-* ```
-*
-* @augments Light
-*/
-var PointLight = class extends Light {
-	/**
-	* Constructs a new point light.
-	*
-	* @param {(number|Color|string)} [color=0xffffff] - The light's color.
-	* @param {number} [intensity=1] - The light's strength/intensity measured in candela (cd).
-	* @param {number} [distance=0] - Maximum range of the light. `0` means no limit.
-	* @param {number} [decay=2] - The amount the light dims along the distance of the light.
-	*/
-	constructor(color, intensity, distance = 0, decay = 2) {
-		super(color, intensity);
-		/**
-		* This flag can be used for type testing.
-		*
-		* @type {boolean}
-		* @readonly
-		* @default true
-		*/
-		this.isPointLight = true;
-		this.type = "PointLight";
-		/**
-		* When distance is zero, light will attenuate according to inverse-square
-		* law to infinite distance. When distance is non-zero, light will attenuate
-		* according to inverse-square law until near the distance cutoff, where it
-		* will then attenuate quickly and smoothly to 0. Inherently, cutoffs are not
-		* physically correct.
-		*
-		* @type {number}
-		* @default 0
-		*/
-		this.distance = distance;
-		/**
-		* The amount the light dims along the distance of the light. In context of
-		* physically-correct rendering the default value should not be changed.
-		*
-		* @type {number}
-		* @default 2
-		*/
-		this.decay = decay;
-		/**
-		* This property holds the light's shadow configuration.
-		*
-		* @type {PointLightShadow}
-		*/
-		this.shadow = new PointLightShadow();
-	}
-	/**
-	* The light's power. Power is the luminous power of the light measured in lumens (lm).
-	* Changing the power will also change the light's intensity.
-	*
-	* @type {number}
-	*/
-	get power() {
-		return this.intensity * 4 * Math.PI;
-	}
-	set power(power) {
-		this.intensity = power / (4 * Math.PI);
-	}
-	dispose() {
-		super.dispose();
-		this.shadow.dispose();
-	}
-	copy(source, recursive) {
-		super.copy(source, recursive);
-		this.distance = source.distance;
-		this.decay = source.decay;
-		this.shadow = source.shadow.clone();
-		return this;
-	}
-	toJSON(meta) {
-		const data = super.toJSON(meta);
-		data.object.distance = this.distance;
-		data.object.decay = this.decay;
-		data.object.shadow = this.shadow.toJSON();
-		return data;
-	}
-};
-/**
 * Camera that uses [orthographic projection](https://en.wikipedia.org/wiki/Orthographic_projection).
 *
 * In this projection mode, an object's size in the rendered image stays
@@ -24384,6 +24212,135 @@ PropertyBinding.prototype.SetterByBindingTypeAndVersioning = [
 		return this;
 	}
 });
+var _axis$1 = /*@__PURE__*/ new Vector3();
+var _lineGeometry;
+var _coneGeometry;
+/**
+* An 3D arrow object for visualizing directions.
+*
+* ```js
+* const dir = new THREE.Vector3( 1, 2, 0 );
+*
+* //normalize the direction vector (convert to vector of length 1)
+* dir.normalize();
+*
+* const origin = new THREE.Vector3( 0, 0, 0 );
+* const length = 1;
+* const hex = 0xffff00;
+*
+* const arrowHelper = new THREE.ArrowHelper( dir, origin, length, hex );
+* scene.add( arrowHelper );
+* ```
+*
+* @augments Object3D
+*/
+var ArrowHelper = class extends Object3D {
+	/**
+	* Constructs a new arrow helper.
+	*
+	* @param {Vector3} [dir=(0, 0, 1)] - The (normalized) direction vector.
+	* @param {Vector3} [origin=(0, 0, 0)] - Point at which the arrow starts.
+	* @param {number} [length=1] - Length of the arrow in world units.
+	* @param {(number|Color|string)} [color=0xffff00] - Color of the arrow.
+	* @param {number} [headLength=length*0.2] - The length of the head of the arrow.
+	* @param {number} [headWidth=headLength*0.2] - The width of the head of the arrow.
+	*/
+	constructor(dir = new Vector3(0, 0, 1), origin = new Vector3(0, 0, 0), length = 1, color = 16776960, headLength = length * .2, headWidth = headLength * .2) {
+		super();
+		this.type = "ArrowHelper";
+		if (_lineGeometry === void 0) {
+			_lineGeometry = new BufferGeometry();
+			_lineGeometry.setAttribute("position", new Float32BufferAttribute([
+				0,
+				0,
+				0,
+				0,
+				1,
+				0
+			], 3));
+			_coneGeometry = new ConeGeometry(.5, 1, 5, 1);
+			_coneGeometry.translate(0, -.5, 0);
+		}
+		this.position.copy(origin);
+		/**
+		* The line part of the arrow helper.
+		*
+		* @type {Line}
+		*/
+		this.line = new Line(_lineGeometry, new LineBasicMaterial({
+			color,
+			toneMapped: false
+		}));
+		this.line.matrixAutoUpdate = false;
+		this.add(this.line);
+		/**
+		* The cone part of the arrow helper.
+		*
+		* @type {Mesh}
+		*/
+		this.cone = new Mesh(_coneGeometry, new MeshBasicMaterial({
+			color,
+			toneMapped: false
+		}));
+		this.cone.matrixAutoUpdate = false;
+		this.add(this.cone);
+		this.setDirection(dir);
+		this.setLength(length, headLength, headWidth);
+	}
+	/**
+	* Sets the direction of the helper.
+	*
+	* @param {Vector3} dir - The normalized direction vector.
+	*/
+	setDirection(dir) {
+		if (dir.y > .99999) this.quaternion.set(0, 0, 0, 1);
+		else if (dir.y < -.99999) this.quaternion.set(1, 0, 0, 0);
+		else {
+			_axis$1.set(dir.z, 0, -dir.x).normalize();
+			const radians = Math.acos(dir.y);
+			this.quaternion.setFromAxisAngle(_axis$1, radians);
+		}
+	}
+	/**
+	* Sets the length of the helper.
+	*
+	* @param {number} length - Length of the arrow in world units.
+	* @param {number} [headLength=length*0.2] - The length of the head of the arrow.
+	* @param {number} [headWidth=headLength*0.2] - The width of the head of the arrow.
+	*/
+	setLength(length, headLength = length * .2, headWidth = headLength * .2) {
+		this.line.scale.set(1, Math.max(1e-4, length - headLength), 1);
+		this.line.updateMatrix();
+		this.cone.scale.set(headWidth, headLength, headWidth);
+		this.cone.position.y = length;
+		this.cone.updateMatrix();
+	}
+	/**
+	* Sets the color of the helper.
+	*
+	* @param {number|Color|string} color - The color to set.
+	*/
+	setColor(color) {
+		this.line.material.color.set(color);
+		this.cone.material.color.set(color);
+	}
+	copy(source) {
+		super.copy(source, false);
+		this.line.copy(source.line);
+		this.cone.copy(source.cone);
+		return this;
+	}
+	/**
+	* Frees the GPU-related resources allocated by this instance. Call this
+	* method whenever this instance is no longer used in your app.
+	*/
+	dispose() {
+		this.line.geometry.dispose();
+		this.line.material.dispose();
+		this.cone.geometry.dispose();
+		this.cone.material.dispose();
+	}
+};
 /**
 * Abstract base class for controls.
 *
@@ -35997,122 +35954,4 @@ function onTouchEnd(event) {
 	this.dispatchEvent(_endEvent);
 }
 //#endregion
-//#region node_modules/three/examples/jsm/environments/RoomEnvironment.js
-/**
-* This class represents a scene with a basic room setup that can be used as
-* input for {@link PMREMGenerator#fromScene}. The resulting PMREM represents the room's
-* lighting and can be used for Image Based Lighting by assigning it to {@link Scene#environment}
-* or directly as an environment map to PBR materials.
-*
-* The implementation is based on the [EnvironmentScene](https://github.com/google/model-viewer/blob/master/packages/model-viewer/src/three-components/EnvironmentScene.ts)
-* component from the `model-viewer` project.
-*
-* ```js
-* const environment = new RoomEnvironment();
-* const pmremGenerator = new THREE.PMREMGenerator( renderer );
-*
-* const envMap = pmremGenerator.fromScene( environment ).texture;
-* scene.environment = envMap;
-* ```
-*
-* @augments Scene
-* @three_import import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-*/
-var RoomEnvironment = class extends Scene {
-	constructor() {
-		super();
-		this.name = "RoomEnvironment";
-		this.position.y = -3.5;
-		const geometry = new BoxGeometry();
-		geometry.deleteAttribute("uv");
-		const roomMaterial = new MeshStandardMaterial({ side: 1 });
-		const boxMaterial = new MeshStandardMaterial();
-		const mainLight = new PointLight(16777215, 900, 28, 2);
-		mainLight.position.set(.418, 16.199, .3);
-		this.add(mainLight);
-		const room = new Mesh(geometry, roomMaterial);
-		room.position.set(-.757, 13.219, .717);
-		room.scale.set(31.713, 28.305, 28.591);
-		this.add(room);
-		const boxes = new InstancedMesh(geometry, boxMaterial, 6);
-		const transform = new Object3D();
-		transform.position.set(-10.906, 2.009, 1.846);
-		transform.rotation.set(0, -.195, 0);
-		transform.scale.set(2.328, 7.905, 4.651);
-		transform.updateMatrix();
-		boxes.setMatrixAt(0, transform.matrix);
-		transform.position.set(-5.607, -.754, -.758);
-		transform.rotation.set(0, .994, 0);
-		transform.scale.set(1.97, 1.534, 3.955);
-		transform.updateMatrix();
-		boxes.setMatrixAt(1, transform.matrix);
-		transform.position.set(6.167, .857, 7.803);
-		transform.rotation.set(0, .561, 0);
-		transform.scale.set(3.927, 6.285, 3.687);
-		transform.updateMatrix();
-		boxes.setMatrixAt(2, transform.matrix);
-		transform.position.set(-2.017, .018, 6.124);
-		transform.rotation.set(0, .333, 0);
-		transform.scale.set(2.002, 4.566, 2.064);
-		transform.updateMatrix();
-		boxes.setMatrixAt(3, transform.matrix);
-		transform.position.set(2.291, -.756, -2.621);
-		transform.rotation.set(0, -.286, 0);
-		transform.scale.set(1.546, 1.552, 1.496);
-		transform.updateMatrix();
-		boxes.setMatrixAt(4, transform.matrix);
-		transform.position.set(-2.193, -.369, -5.547);
-		transform.rotation.set(0, .516, 0);
-		transform.scale.set(3.875, 3.487, 2.986);
-		transform.updateMatrix();
-		boxes.setMatrixAt(5, transform.matrix);
-		this.add(boxes);
-		const light1 = new Mesh(geometry, createAreaLightMaterial(50));
-		light1.position.set(-16.116, 14.37, 8.208);
-		light1.scale.set(.1, 2.428, 2.739);
-		this.add(light1);
-		const light2 = new Mesh(geometry, createAreaLightMaterial(50));
-		light2.position.set(-16.109, 18.021, -8.207);
-		light2.scale.set(.1, 2.425, 2.751);
-		this.add(light2);
-		const light3 = new Mesh(geometry, createAreaLightMaterial(17));
-		light3.position.set(14.904, 12.198, -1.832);
-		light3.scale.set(.15, 4.265, 6.331);
-		this.add(light3);
-		const light4 = new Mesh(geometry, createAreaLightMaterial(43));
-		light4.position.set(-.462, 8.89, 14.52);
-		light4.scale.set(4.38, 5.441, .088);
-		this.add(light4);
-		const light5 = new Mesh(geometry, createAreaLightMaterial(20));
-		light5.position.set(3.235, 11.486, -12.541);
-		light5.scale.set(2.5, 2, .1);
-		this.add(light5);
-		const light6 = new Mesh(geometry, createAreaLightMaterial(100));
-		light6.position.set(0, 20, 0);
-		light6.scale.set(1, .1, 1);
-		this.add(light6);
-	}
-	/**
-	* Frees internal resources. This method should be called
-	* when the environment is no longer required.
-	*/
-	dispose() {
-		const resources = /* @__PURE__ */ new Set();
-		this.traverse((object) => {
-			if (object.isMesh) {
-				resources.add(object.geometry);
-				resources.add(object.material);
-			}
-		});
-		for (const resource of resources) resource.dispose();
-	}
-};
-function createAreaLightMaterial(intensity) {
-	return new MeshLambertMaterial({
-		color: 0,
-		emissive: 16777215,
-		emissiveIntensity: intensity
-	});
-}
-//#endregion
-export { TextureLoader as S, MeshStandardMaterial as _, BufferGeometry as a, Scene as b, Color as c, ExtrudeGeometry as d, Float32BufferAttribute as f, MeshPhysicalMaterial as g, MeshBasicMaterial as h, WebGLRenderer as i, CylinderGeometry as l, Mesh as m, TrackballControls as n, CanvasTexture as o, Group as p, PMREMGenerator as r, CircleGeometry as s, RoomEnvironment as t, DirectionalLight as u, PerspectiveCamera as v, Shape as x, SRGBColorSpace as y };
+export { Vector3 as A, PerspectiveCamera as C, Scene as D, SRGBColorSpace as E, Shape as O, MeshStandardMaterial as S, RingGeometry as T, LineBasicMaterial as _, BoxGeometry as a, MeshBasicMaterial as b, CircleGeometry as c, DirectionalLight as d, EdgesGeometry as f, Line as g, Group as h, ArrowHelper as i, TextureLoader as k, Color as l, Float32BufferAttribute as m, PMREMGenerator as n, BufferGeometry as o, ExtrudeGeometry as p, WebGLRenderer as r, CanvasTexture as s, TrackballControls as t, CylinderGeometry as u, LineSegments as v, PlaneGeometry as w, MeshPhysicalMaterial as x, Mesh as y };
