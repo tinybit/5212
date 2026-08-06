@@ -515,10 +515,11 @@ function dateWindowWallGeometry(dialThickness = DIAL_THICKNESS) {
   const points = dateWindowOutline();
   const positions: number[] = [];
   const colors: number[] = [];
-  // Distinctly darker than the dial face: the cut edge sits inside a recess
-  // that sees almost none of the studio, so it must not glow like open dial.
-  const topColor = new THREE.Color(0xcfc7ba);
-  const bottomColor = new THREE.Color(0x6e675c);
+  // Physical lacquer color, not baked lighting. Only a mild warm contact
+  // gradient remains at the bottom; illumination comes from the live key,
+  // environment fill, and wheel-bounce approximation.
+  const topColor = new THREE.Color(0xeee8e0);
+  const bottomColor = new THREE.Color(0xd8d0c5);
 
   for (let i = 0; i < points.length; i++) {
     const a = points[i];
@@ -784,6 +785,11 @@ type SceneHandles = {
   setDateWheelBandVisible: (visible: boolean) => void;
   updateDateStructure: (settings: DateStructureSettings) => void;
   updateDateWheelBand: (settings: DateWheelBandSettings) => void;
+  updateWallLighting: (
+    ambient: number,
+    keyIntensity: number,
+    elevationDeg: number,
+  ) => void;
   updateWheelLight: (
     azimuthDeg: number,
     elevationDeg: number,
@@ -1010,47 +1016,15 @@ export function Watch3D({ className = "" }: Props) {
 
     const textureLoader = new THREE.TextureLoader();
     const dateWheelTexture = textureLoader.load(
-      `${import.meta.env.BASE_URL}date-ring-overlay.png`,
-      (texture) => {
-        // Build one seamless solid disk: pad the original artwork by 77px on
-        // every side and draw it at native size over matching paper. Geometry
-        // grows by the same ratio, so numeral size and spacing do not change.
-        const image = texture.image as HTMLImageElement;
-        const canvas = document.createElement("canvas");
-        const imageWidth = image.naturalWidth || image.width;
-        const imageHeight = image.naturalHeight || image.height;
-        canvas.width = imageWidth + DATE_RING_TEXTURE_MARGIN * 2;
-        canvas.height = imageHeight + DATE_RING_TEXTURE_MARGIN * 2;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.fillStyle = "#f9f9f9";
-        ctx.beginPath();
-        ctx.arc(
-          canvas.width / 2,
-          canvas.height / 2,
-          DATE_RING_TEXTURE_RADIUS + DATE_RING_TEXTURE_MARGIN,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-        ctx.drawImage(image, DATE_RING_TEXTURE_MARGIN, DATE_RING_TEXTURE_MARGIN);
-        // The source artwork contains a faint photographed hairline at its
-        // original inner radius (895px). Paint only that narrow circular strip
-        // with matching paper; it is clear of the calibrated numeral bodies.
-        ctx.strokeStyle = "#f9f9f9";
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, canvas.height / 2, 895, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, canvas.height / 2, 1147, 0, Math.PI * 2);
-        ctx.stroke();
-        texture.image = canvas as unknown as HTMLImageElement;
-        texture.needsUpdate = true;
-      },
+      `${import.meta.env.BASE_URL}date-wheel-albedo.png`,
     );
     dateWheelTexture.colorSpace = THREE.SRGBColorSpace;
     dateWheelTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const dateWheelNormalMap = textureLoader.load(
+      `${import.meta.env.BASE_URL}date-wheel-normal.png`,
+    );
+    dateWheelNormalMap.colorSpace = THREE.NoColorSpace;
+    dateWheelNormalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
     // Dial: the composited photo is now treated as albedo on a lit lacquer
     // material, so the dial responds to the studio rig (sheen sweeps as the
@@ -1138,23 +1112,44 @@ export function Watch3D({ className = "" }: Props) {
       roughness: 0.42,
       side: THREE.DoubleSide,
     });
-    // Lacquered cut edge of the dial plate: base color comes from the wall
-    // geometry's vertex gradient (cream face fading into contact occlusion).
-    // Environment response is cut hard — a recess sees a sliver of sky, not
-    // the whole studio; the key light still reaches in through the opening.
-    // The env map is assigned DIRECTLY (not via scene.environment): r185
-    // overwrites envMapIntensity with scene.environmentIntensity for
-    // scene-environment materials, silently ignoring the per-material value.
+    // Lacquered cut edge of the dial plate. The explicit environment map lets
+    // us drive cavity fill independently from scene.environmentIntensity;
+    // updateWallLighting below reconnects it to the Ambient control and adds
+    // a small key-dependent bounce term from the white date wheel.
     const wallMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.55,
+      metalness: 0,
+      roughness: 0.68,
       envMap: environment.texture,
-      // ~0.15 approximates the bounce light a real cavity gets back off the
-      // white disc and lacquered walls (the photo's shadow floor isn't black).
-      envMapIntensity: 0.15,
+      envMapIntensity: 0.36,
+      emissive: 0x8a8175,
+      emissiveIntensity: 0.08,
       side: THREE.DoubleSide,
     });
+    const updateWallLighting = (
+      ambient: number,
+      keyIntensity: number,
+      elevationDeg: number,
+    ) => {
+      const keyIrradiance = keyIntensity * Math.sin(elevationDeg * DEG);
+      const wheelBounce = keyIrradiance * 0.04;
+      wallMaterial.envMapIntensity = THREE.MathUtils.clamp(
+        0.06 + ambient * 0.28 + wheelBounce,
+        0.04,
+        0.8,
+      );
+      wallMaterial.emissiveIntensity = THREE.MathUtils.clamp(
+        0.02 + ambient * 0.04 + keyIrradiance * 0.015,
+        0.01,
+        0.18,
+      );
+    };
+    updateWallLighting(
+      DEFAULT_AMBIENT_INTENSITY,
+      DEFAULT_LIGHT_INTENSITY,
+      DEFAULT_ELEVATION,
+    );
 
     const watch = new THREE.Group();
     scene.add(watch);
@@ -1208,12 +1203,96 @@ export function Watch3D({ className = "" }: Props) {
     const dateWheelLightMap = new THREE.CanvasTexture(lightMapCanvas);
     dateWheelLightMap.center.set(0.5, 0.5);
     dateWheelLightMap.matrixAutoUpdate = false;
-    const dateWheelMaterial = new THREE.MeshBasicMaterial({
-      map: dateWheelTexture,
-      color: 0xffffff,
-      alphaTest: 0.4,
-      lightMap: dateWheelLightMap,
-      lightMapIntensity: initialScale,
+    const initialLightDirection = new THREE.Vector3(
+      Math.cos(DEFAULT_AZIMUTH * DEG) * Math.cos(DEFAULT_ELEVATION * DEG),
+      Math.sin(DEFAULT_AZIMUTH * DEG) * Math.cos(DEFAULT_ELEVATION * DEG),
+      Math.sin(DEFAULT_ELEVATION * DEG),
+    ).normalize();
+    const dateWheelMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap: { value: dateWheelTexture },
+        uNormalMap: { value: dateWheelNormalMap },
+        uLightMap: { value: dateWheelLightMap },
+        uLightMapMatrix: { value: dateWheelLightMap.matrix },
+        uLightMapIntensity: { value: initialScale },
+        uLightDirection: { value: initialLightDirection },
+        uDialOcclusion: { value: 1 },
+        uNormalStrength: { value: 1 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vViewPosition;
+
+        void main() {
+          vUv = uv;
+          vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+          vViewPosition = viewPosition.xyz;
+          gl_Position = projectionMatrix * viewPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uMap;
+        uniform sampler2D uNormalMap;
+        uniform sampler2D uLightMap;
+        uniform mat3 uLightMapMatrix;
+        uniform float uLightMapIntensity;
+        uniform vec3 uLightDirection;
+        uniform float uDialOcclusion;
+        uniform float uNormalStrength;
+        uniform mat3 normalMatrix;
+
+        varying vec2 vUv;
+        varying vec3 vViewPosition;
+
+        void main() {
+          vec4 albedoSample = texture2D(uMap, vUv);
+          if (albedoSample.a < 0.4) discard;
+
+          vec3 tangentNormal = texture2D(uNormalMap, vUv).xyz * 2.0 - 1.0;
+          tangentNormal.xy *= uNormalStrength;
+          tangentNormal = normalize(tangentNormal);
+
+          vec3 normalView = normalize(normalMatrix * tangentNormal);
+          vec3 flatNormalView = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));
+          vec3 lightView = normalize(mat3(viewMatrix) * uLightDirection);
+          vec3 viewDirection = normalize(-vViewPosition);
+          vec3 halfDirection = normalize(lightView + viewDirection);
+
+          float flatDiffuse = max(dot(flatNormalView, lightView), 0.08);
+          float reliefDiffuse = max(dot(normalView, lightView), 0.0);
+          float reliefRatio = clamp(reliefDiffuse / flatDiffuse, 0.45, 1.65);
+
+          vec2 lightUv = (uLightMapMatrix * vec3(vUv, 1.0)).xy;
+          float bakedIrradiance =
+            texture2D(uLightMap, lightUv).r * uLightMapIntensity;
+          float illumination = mix(1.0, bakedIrradiance, uDialOcclusion);
+
+          float albedoLuminance = dot(
+            albedoSample.rgb,
+            vec3(0.2126, 0.7152, 0.0722)
+          );
+          float inkMask = 1.0 - smoothstep(0.08, 0.72, albedoLuminance);
+          float relief = mix(1.0, reliefRatio, 0.88 * inkMask);
+          float visibility = mix(
+            1.0,
+            clamp(bakedIrradiance / max(uLightMapIntensity, 0.001), 0.0, 1.0),
+            uDialOcclusion
+          );
+          float inkSpecular =
+            pow(max(dot(normalView, halfDirection), 0.0), 20.0) *
+            0.1 *
+            inkMask *
+            visibility;
+
+          vec3 outgoingLight =
+            albedoSample.rgb * illumination * relief +
+            vec3(inkSpecular);
+          gl_FragColor = vec4(outgoingLight, albedoSample.a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+      toneMapped: true,
     });
     const dateWheelGeometry = new THREE.CircleGeometry(DATE_WHEEL_OUTER_RADIUS, 192);
     const dateWheelFace = new THREE.Mesh(dateWheelGeometry, dateWheelMaterial);
@@ -1289,8 +1368,7 @@ export function Watch3D({ className = "" }: Props) {
     dateWheel.add(dateWheelRotation);
 
     const setDialOcclusion = (enabled: boolean) => {
-      dateWheelMaterial.lightMap = enabled ? dateWheelLightMap : null;
-      dateWheelMaterial.needsUpdate = true;
+      dateWheelMaterial.uniforms.uDialOcclusion.value = enabled ? 1 : 0;
     };
 
     // Re-bake the photon integral when the light rig moves. Intensity changes
@@ -1306,7 +1384,16 @@ export function Watch3D({ className = "" }: Props) {
       dateWheelDepth: number,
     ) => {
       const { keyTerm, ambientTerm } = wheelShadingTerms(elevationDeg, intensity, ambient);
-      dateWheelMaterial.lightMapIntensity = keyTerm + ambientTerm;
+      dateWheelMaterial.uniforms.uLightMapIntensity.value = keyTerm + ambientTerm;
+      const azimuth = azimuthDeg * DEG;
+      const elevation = elevationDeg * DEG;
+      (
+        dateWheelMaterial.uniforms.uLightDirection.value as THREE.Vector3
+      ).set(
+        Math.cos(azimuth) * Math.cos(elevation),
+        Math.sin(azimuth) * Math.cos(elevation),
+        Math.sin(elevation),
+      );
       clearTimeout(bakeTimer);
       bakeTimer = setTimeout(() => {
         bakeDateWheelShading(
@@ -1682,6 +1769,7 @@ export function Watch3D({ className = "" }: Props) {
       setDateWheelBandVisible,
       updateDateStructure,
       updateDateWheelBand,
+      updateWallLighting,
       updateWheelLight,
     };
 
@@ -1713,6 +1801,7 @@ export function Watch3D({ className = "" }: Props) {
       });
       dialMaterial.map?.dispose();
       dateWheelTexture.dispose();
+      dateWheelNormalMap.dispose();
       dateWheelLightMap.dispose();
       clearTimeout(bakeTimer);
       environment.texture.dispose();
@@ -1764,6 +1853,7 @@ export function Watch3D({ className = "" }: Props) {
   useEffect(() => {
     const handles = sceneRef.current;
     if (!handles) return;
+    handles.updateWallLighting(light.ambient, light.intensity, light.elevation);
     handles.updateWheelLight(
       light.azimuth,
       light.elevation,
