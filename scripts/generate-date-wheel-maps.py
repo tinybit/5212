@@ -6,8 +6,9 @@ import shutil
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import distance_transform_edt, gaussian_filter
-from skimage.morphology import medial_axis
+from scipy.ndimage import gaussian_filter
+
+from dial_relief import rounded_stroke_height, tangent_normal_map
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,51 +73,8 @@ def main() -> None:
     albedo_rgba[..., :3] = np.clip(albedo_rgb, 0, 255).astype(np.uint8)
     albedo_rgba[..., 3] = np.where(disk, 255, 0).astype(np.uint8)
 
-    # A pad-printed stroke has a rounded capsule cross-section. Normalize each
-    # pixel's edge distance by the LOCAL half-width at its nearest medial-axis
-    # point, then use a quarter-sine dome: finite rounded shoulder at the edge,
-    # continuous curvature across the full stroke, and zero slope at the crown.
-    # Unlike the previous saturating profile, this never creates a flat top or
-    # a narrow bevel ring.
-    stroke = padded_mask > 0.5
-    skeleton, edge_distance = medial_axis(stroke, return_distance=True)
-    nearest_skeleton = distance_transform_edt(
-        ~skeleton,
-        return_distances=False,
-        return_indices=True,
-    )
-    local_half_width = edge_distance[
-        nearest_skeleton[0],
-        nearest_skeleton[1],
-    ]
-    normalized_depth = np.zeros_like(padded_mask)
-    normalized_depth[stroke] = np.clip(
-        edge_distance[stroke] / np.maximum(local_half_width[stroke], 1.0),
-        0.0,
-        1.0,
-    )
-    rounded_dome = np.sin(normalized_depth * np.pi / 2.0)
-    height_map = gaussian_filter(rounded_dome * padded_mask, 0.7)
-    if height_map.max() > 0:
-        height_map /= height_map.max()
-
-    # Tangent-space normal map. Image Y points down while texture +V points up,
-    # hence the opposite signs for X and Y derivatives.
-    gradient_y, gradient_x = np.gradient(height_map)
-    relief_strength = 6.0
-    normal_x = -gradient_x * relief_strength
-    normal_y = gradient_y * relief_strength
-    normal_z = np.ones_like(height_map)
-    normal_length = np.sqrt(normal_x**2 + normal_y**2 + normal_z**2)
-    normal = np.stack(
-        (
-            normal_x / normal_length,
-            normal_y / normal_length,
-            normal_z / normal_length,
-        ),
-        axis=-1,
-    )
-    normal_rgb = np.clip((normal * 0.5 + 0.5) * 255.0, 0, 255).astype(np.uint8)
+    height_map = rounded_stroke_height(padded_mask)
+    normal_rgb = tangent_normal_map(height_map)
     normal_rgb[~disk] = np.array([128, 128, 255], dtype=np.uint8)
 
     Image.fromarray(albedo_rgba, "RGBA").save(ALBEDO, optimize=True)

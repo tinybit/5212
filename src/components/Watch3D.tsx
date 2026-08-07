@@ -717,6 +717,8 @@ type LightSettings = {
   distance: number;
 };
 
+type MarkerGlossMode = "controlled" | "mirror";
+
 type DateDiskSettings = {
   /** Additional offsets in the 720px calibration coordinate system. */
   x: number;
@@ -771,6 +773,7 @@ const DEFAULT_DATE_WHEEL_SQUEEZE: DateWheelSqueezeSettings = {
 const SHOW_DATE_CALIBRATION_CONTROLS = false;
 
 const LIGHT_DISTANCE = 5000;
+const DIAL_SOFTBOX_REFLECTION_SCALE = 0.45;
 
 type SceneHandles = {
   elements: Record<ElementKey, THREE.Object3D>;
@@ -785,6 +788,12 @@ type SceneHandles = {
   setDateWheelBandVisible: (visible: boolean) => void;
   updateDateStructure: (settings: DateStructureSettings) => void;
   updateDateWheelBand: (settings: DateWheelBandSettings) => void;
+  updateDialOptics: (
+    markerGlossMode: MarkerGlossMode,
+    softboxReflection: boolean,
+    ambient: number,
+    azimuthDeg: number,
+  ) => void;
   updateWallLighting: (
     ambient: number,
     keyIntensity: number,
@@ -822,6 +831,8 @@ export function Watch3D({ className = "" }: Props) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"elements" | "light">("elements");
   const [showLightSource, setShowLightSource] = useState(true);
+  const [markerGlossMode, setMarkerGlossMode] = useState<MarkerGlossMode>("controlled");
+  const [softboxReflection, setSoftboxReflection] = useState(true);
   const [showDateWheelBand, setShowDateWheelBand] = useState(false);
   // Realism rebuild in progress: start from just the dial + date wheel and
   // re-enable elements as each one is brought up to standard.
@@ -1025,24 +1036,74 @@ export function Watch3D({ className = "" }: Props) {
     );
     dateWheelNormalMap.colorSpace = THREE.NoColorSpace;
     dateWheelNormalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const dialNormalMap = textureLoader.load(
+      `${import.meta.env.BASE_URL}main-dial-normal.png`,
+    );
+    dialNormalMap.colorSpace = THREE.NoColorSpace;
+    dialNormalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const dialMaterialMap = textureLoader.load(
+      `${import.meta.env.BASE_URL}main-dial-material.png`,
+    );
+    dialMaterialMap.colorSpace = THREE.NoColorSpace;
+    dialMaterialMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const dialMirrorMaterialMap = textureLoader.load(
+      `${import.meta.env.BASE_URL}main-dial-material-mirror.png`,
+    );
+    dialMirrorMaterialMap.colorSpace = THREE.NoColorSpace;
+    dialMirrorMaterialMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-    // Dial: the composited photo is now treated as albedo on a lit lacquer
-    // material, so the dial responds to the studio rig (sheen sweeps as the
-    // watch tilts). Specular is kept deliberately tame: near-white albedo
-    // plus softbox reflections veiled the artwork at oblique angles, so the
-    // sheen must stay a whisper, never a wash.
+    // Dial: the composited photo is treated as albedo on a lit lacquer
+    // material. Every printed glyph, rail, sector, and dot uses the same
+    // rounded pad-print profile as the date wheel. A packed physical map makes
+    // only the pure-black vector rails and dots polished and highly specular;
+    // the paper and photographed lettering retain their original matte values.
     const dialMaterial = new THREE.MeshPhysicalMaterial({
       alphaTest: 0.5,
       metalness: 0,
       roughness: 0.55,
-      specularIntensity: 0.4,
-      clearcoat: 0.2,
+      roughnessMap: dialMaterialMap,
+      specularIntensity: 1,
+      specularIntensityMap: dialMaterialMap,
+      clearcoat: 1,
+      clearcoatMap: dialMaterialMap,
       clearcoatRoughness: 0.5,
+      clearcoatRoughnessMap: dialMaterialMap,
+      clearcoatNormalMap: dialNormalMap,
+      clearcoatNormalScale: new THREE.Vector2(1, 1),
+      normalMap: dialNormalMap,
+      normalScale: new THREE.Vector2(1, 1),
+      envMap: environment.texture,
+      envMapIntensity: DEFAULT_AMBIENT_INTENSITY * DIAL_SOFTBOX_REFLECTION_SCALE,
       // The dial is a flat single-sided disc: with the default shadowSide
       // (back faces only) a plane renders NOTHING into the shadow map and
       // casts no shadow at all — this is what killed the date-window shadow.
       shadowSide: THREE.DoubleSide,
     });
+    const updateDialOptics = (
+      markerMode: MarkerGlossMode,
+      reflectionEnabled: boolean,
+      ambient: number,
+      azimuthDeg: number,
+    ) => {
+      const materialMap =
+        markerMode === "mirror" ? dialMirrorMaterialMap : dialMaterialMap;
+      dialMaterial.roughnessMap = materialMap;
+      dialMaterial.specularIntensityMap = materialMap;
+      dialMaterial.clearcoatMap = materialMap;
+      dialMaterial.clearcoatRoughnessMap = materialMap;
+      // Reflection toggle controls only the PMREM panel image. Direct key
+      // specular remains active, so "off" never collapses to flat Lambert.
+      dialMaterial.envMapIntensity = reflectionEnabled
+        ? ambient * DIAL_SOFTBOX_REFLECTION_SCALE
+        : 0;
+      dialMaterial.envMapRotation.set(0, 0, (azimuthDeg - STUDIO_AZIMUTH) * DEG);
+    };
+    updateDialOptics(
+      "controlled",
+      true,
+      DEFAULT_AMBIENT_INTENSITY,
+      DEFAULT_AZIMUTH,
+    );
     textureLoader.load(
       `${import.meta.env.BASE_URL}reference-handless-date-cutout.png`,
       (photo) => {
@@ -1769,6 +1830,7 @@ export function Watch3D({ className = "" }: Props) {
       setDateWheelBandVisible,
       updateDateStructure,
       updateDateWheelBand,
+      updateDialOptics,
       updateWallLighting,
       updateWheelLight,
     };
@@ -1800,6 +1862,9 @@ export function Watch3D({ className = "" }: Props) {
         }
       });
       dialMaterial.map?.dispose();
+      dialNormalMap.dispose();
+      dialMaterialMap.dispose();
+      dialMirrorMaterialMap.dispose();
       dateWheelTexture.dispose();
       dateWheelNormalMap.dispose();
       dateWheelLightMap.dispose();
@@ -1876,6 +1941,15 @@ export function Watch3D({ className = "" }: Props) {
     light.intensity,
     light.size,
   ]);
+
+  useEffect(() => {
+    sceneRef.current?.updateDialOptics(
+      markerGlossMode,
+      softboxReflection,
+      light.ambient,
+      light.azimuth,
+    );
+  }, [light.ambient, light.azimuth, markerGlossMode, softboxReflection]);
 
   useEffect(() => {
     const handles = sceneRef.current;
@@ -2188,6 +2262,45 @@ export function Watch3D({ className = "" }: Props) {
               />
             </label>
           ))}
+          <div className="mb-1 mt-3 border-t border-black/15 pt-2 text-[10px] font-bold">
+            Reflections
+          </div>
+          <div className="flex items-center justify-between gap-2 text-[10px] font-semibold">
+            <span>Minute marker method</span>
+            <output className="tabular-nums">
+              {markerGlossMode === "controlled" ? "Controlled" : "Mirror (previous)"}
+            </output>
+          </div>
+          <button
+            type="button"
+            aria-label="Switch minute marker reflection method"
+            onClick={() =>
+              setMarkerGlossMode((current) =>
+                current === "controlled" ? "mirror" : "controlled",
+              )
+            }
+            className="mt-1 w-full rounded-lg border border-black/25 bg-white px-2 py-1.5 text-xs font-semibold text-black transition hover:bg-zinc-100 active:scale-95"
+          >
+            {markerGlossMode === "controlled"
+              ? "Switch to mirror method"
+              : "Switch to controlled method"}
+          </button>
+          <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold">
+            <span>Softbox reflection</span>
+            <output>{softboxReflection ? "On" : "Off"}</output>
+          </div>
+          <button
+            type="button"
+            aria-pressed={softboxReflection}
+            onClick={() => setSoftboxReflection((enabled) => !enabled)}
+            className={`mt-1 w-full rounded-lg border px-2 py-1.5 text-xs font-semibold transition active:scale-95 ${
+              softboxReflection
+                ? "border-black bg-black text-white hover:bg-zinc-800"
+                : "border-black/25 bg-white text-black hover:bg-zinc-100"
+            }`}
+          >
+            {softboxReflection ? "Turn reflection off" : "Turn reflection on"}
+          </button>
           </div>
           )}
         </div>
