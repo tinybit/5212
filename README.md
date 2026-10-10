@@ -36,6 +36,10 @@ Garmin watch face ([garmin/README.md](garmin/README.md)):
 - All five hands drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
 - 64-colour MIP and full-colour AMOLED variants, with a hands-only always-on view on AMOLED.
 
+<p align="center">
+  <img src="docs/screenshots/garmin-fenix9pro47mm-simulator.webp" alt="5212 watch face in the Connect IQ simulator on a fēnix 9 Pro 47 mm" width="48%">
+</p>
+
 ## Run locally
 
 ```bash

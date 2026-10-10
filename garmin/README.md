@@ -2,6 +2,10 @@
 
 Connect IQ watch face built from the calibrated 5212 dial in this repo.
 
+<p align="center">
+  <img src="../docs/screenshots/garmin-fenix9pro47mm-simulator.webp" alt="5212 watch face in the Connect IQ simulator on a fēnix 9 Pro 47 mm" width="48%">
+</p>
+
 - **Dial:** the web dial without hands, rendered by `tools/export-assets.mjs` and stored as one bitmap per screen size, plus one date-window bitmap per day (1–31).
 - **Hands:** all five hands are drawn on the watch as polygons from the measured shapes in `src/components/WeeklyCalendarWatch.tsx`, because not every target can rotate bitmaps.
 - **Calendar:** ISO week, weekday, and date follow the same formulas as the web dial (`source/Calendar.mc`).
