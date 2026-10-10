@@ -30,10 +30,11 @@ Implemented and calibrated:
 - Perpetual local-calendar synchronization for the exact ISO week, weekday, and date, including variable month lengths and leap years.
 - An aligned 1–31 date wheel isolated from the supplied movement photograph and composited beneath a transparent Reference 2 aperture with its original bevel shadow. Invalid end-of-month dates are skipped automatically.
 
-Not implemented yet:
+Garmin watch face ([garmin/README.md](garmin/README.md)):
 
-- Garmin 260×260 export and asset-generation pipeline.
-- Production watch-face integration and MIP/AOD optimization.
+- Dial and per-day date-window bitmaps exported from this dial for the fēnix 6 Pro (260×260 MIP) and the fēnix 9 Pro 47 mm (454×454 AMOLED).
+- All five hands drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
+- 64-colour MIP and full-colour AMOLED variants, with a hands-only always-on view on AMOLED.
 
 ## Run locally
 
