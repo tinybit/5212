@@ -10,7 +10,6 @@ A pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Week
 - [Install](#install)
   - [macOS screensaver](#macos-screensaver)
   - [Garmin watch face](#garmin-watch-face)
-  - [Platform support](#platform-support)
 - [Run from source](#run-from-source)
 - [Web simulator](#web-simulator)
   - [Controls](#controls)
@@ -50,48 +49,40 @@ What is reproduced:
 
 ## Install
 
-Prebuilt files for every version are on the [Releases page](https://github.com/tinybit/5212/releases/latest). Each file has a `.sha256` checksum beside it. The web simulator needs no install: open the [live demo](https://patek-5212.grok.me/).
+Prebuilt files for every version are on the [Releases page](https://github.com/tinybit/5212/releases/latest). Each zip has a `.sha256` file beside it. The web simulator needs no install: open the [live demo](https://patek-5212.grok.me/).
 
-| File                                             | What it is                                                                    | For                                                     |
-| ------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `5212-Weekly-Calendar-<version>-macos.saver.zip` | macOS screensaver, universal (Apple Silicon and Intel)                        | macOS 13 or newer                                       |
-| `5212-Weekly-Calendar-<version>-garmin.zip`      | Garmin watch face: one `.prg` file per watch model, plus a `WATCHES.md` table | 66 watches ([list](garmin/README.md#supported-watches)) |
+| File                                             | What it is                                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `5212-Weekly-Calendar-<version>-macos.saver.zip` | Screensaver for macOS 13 or newer, Apple Silicon and Intel                                     |
+| `5212-Weekly-Calendar-<version>-garmin.zip`      | Watch face: one `.prg` file per watch model, plus `WATCHES.md` (which file is for which watch) |
 
 ### macOS screensaver
 
-1. Download and unzip the `.saver.zip`.
-2. Double-click `5212 Weekly Calendar.saver` and approve the installation. When upgrading, approve the replacement.
-3. Select **5212 Weekly Calendar** in **System Settings → Wallpaper → Screen Saver** (macOS 26) or **System Settings → Screen Saver** (macOS 13–15).
+1. Unzip the download and double-click `5212 Weekly Calendar.saver`.
+2. Approve the installation. When upgrading, approve the replacement.
+3. Open **System Settings → Wallpaper → Screen Saver** (macOS 26) or **System Settings → Screen Saver** (macOS 13–15) and select **5212 Weekly Calendar**.
 
-The bundle is signed ad hoc and is not notarized, so macOS may refuse to open it. In that case open **System Settings → Privacy & Security**, scroll to the Security section, click **Open Anyway**, and enter your password ([Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)).
+If macOS refuses to open the file: it is signed ad hoc and not notarized. Open **System Settings → Privacy & Security**, scroll to the Security section, click **Open Anyway** ([Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)), and try again.
 
-On macOS 26, System Settings can keep running the previous build after an upgrade. Quit System Settings, run `killall legacyScreenSaver 2>/dev/null || true`, and reopen it.
+If the old version keeps showing after an upgrade (macOS 26): quit System Settings, run `killall legacyScreenSaver`, and open System Settings again.
 
 ### Garmin watch face
 
-The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Download and unzip the `-garmin.zip`; it holds one `.prg` per watch model and a `WATCHES.md` table. Take the file whose device id matches your watch ([list](garmin/README.md#supported-watches)); a file built for another model does not install.
+You copy one file onto the watch over USB. No Connect IQ store or account is needed.
 
-1. Quit Garmin Express completely, including its menu bar or tray icon. While it runs, the watch's storage is not reachable.
-2. Connect the watch with its USB cable and open its storage:
-   - **macOS:** Finder does not show the watch, because it uses MTP. Use [OpenMTP](https://openmtp.ganeshrvel.com/) (free, macOS 10.14 or newer; `brew install --cask openmtp`).
-   - **Windows:** the watch appears in File Explorer as a portable device. Not tested by us.
-   - **Linux:** not tested. The watch is an MTP device.
-3. Copy the `.prg` into the `GARMIN/APPS` folder on the watch, then eject and unplug it. The watch may move or rename the file after you unplug it; that is normal.
-4. On the watch, hold **MENU**, select **Watch Face**, press **UP** or **DOWN** until **5212** shows, then press **START** and select **Apply**.
+1. Unzip the download. Open `WATCHES.md` and find your watch. Note its device id, for example `fenix7`. The same list is in [garmin/README.md](garmin/README.md#supported-watches).
+2. Quit Garmin Express completely, including its menu bar or tray icon. While it runs, the watch's storage is not reachable.
+3. Connect the watch with its USB cable and open its storage:
+   - **macOS:** Finder does not show the watch. Install [OpenMTP](https://openmtp.ganeshrvel.com/) (free; `brew install --cask openmtp`) and open the watch in it.
+   - **Windows:** the watch appears in File Explorer under portable devices.
+   - **Linux:** the watch is an MTP device; use a file manager with MTP support.
+4. Copy `5212-Weekly-Calendar-<version>-garmin-<device id>.prg` into the `GARMIN/APPS` folder on the watch.
+5. Eject and unplug the watch. The watch may move or rename the file afterwards; that is normal.
+6. On the watch, hold **MENU**, select **Watch Face**, press **UP** or **DOWN** until **5212** shows, then press **START** and select **Apply**.
 
 To remove the watch face later, use Garmin Express.
 
-Tested on a fēnix 6 Pro Solar from macOS. Every other model has run only in Garmin's simulator so far.
-
-### Platform support
-
-|                                  | macOS              | Windows                    | Linux              |
-| -------------------------------- | ------------------ | -------------------------- | ------------------ |
-| Web simulator (live demo)        | Any modern browser | Any modern browser         | Any modern browser |
-| macOS screensaver                | macOS 13 or newer  | No                         | No                 |
-| Installing the Garmin watch face | OpenMTP (tested)   | File Explorer (not tested) | Not tested         |
-
-The watch face itself runs on the watch. The computer's operating system matters only for copying the file.
+Tested on a fēnix 6 Pro Solar from macOS. The other 65 models and the Windows and Linux steps have been checked in Garmin's simulator and Garmin's documentation only, not on hardware.
 
 ## Run from source
 
