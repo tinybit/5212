@@ -7,9 +7,11 @@ import Toybox.Timer;
 import Toybox.WatchUi;
 
 // Patek Philippe 5212A weekly-calendar dial: a static dial bitmap rendered
-// from the web reconstruction, a date-window bitmap per day, and five hands
-// drawn as polygons (bitmaps cannot be rotated on every target watch).
-// AMOLED watches get a second, inverted dial bitmap for the always-on view.
+// from the web reconstruction, a date-window bitmap per day, and five hands.
+// The hands are polygons, except on the fēnix 9 Pro models, where the hour,
+// minute and seconds hands are pre-rendered bitmaps rotated with sub-pixel
+// precision (see Hands.drawBitmapHand). AMOLED watches get a second, inverted
+// dial bitmap for the always-on view.
 class Face5212View extends WatchUi.WatchFace {
 
     // Photo-pixel geometry from WeeklyCalendarWatch.tsx, used for the date-window position.
@@ -61,9 +63,32 @@ class Face5212View extends WatchUi.WatchFace {
         if (_burnInProtection) {
             _dialAod = WatchUi.loadResource(Rez.Drawables.DialAod) as BitmapResource;
         }
+        var smooth = false;
+        if (smoothHandsSupported(dc)) {
+            var pivots = Generated.handPivots(width);
+            var hour = WatchUi.loadResource(Rez.Drawables.HandHour) as BitmapResource;
+            // Watches whose resource compiler cannot keep PNG alpha get a 1x1 placeholder
+            // instead of hand bitmaps (tools/export-assets.mjs) and keep polygon hands.
+            if (pivots != null && hour.getWidth() > 1) {
+                Hands.setupSmooth(hour,
+                    WatchUi.loadResource(Rez.Drawables.HandMinute) as BitmapResource,
+                    WatchUi.loadResource(Rez.Drawables.HandSeconds) as BitmapResource,
+                    pivots, Generated.handBitmapScale());
+                smooth = true;
+            }
+        }
         var stats = System.getSystemStats();
         System.println("screen " + width + ", burn-in protection " + _burnInProtection
-            + ", memory after dial: " + stats.usedMemory + " / " + stats.totalMemory);
+            + ", bitmap hands " + smooth
+            + ", memory after bitmaps: " + stats.usedMemory + " / " + stats.totalMemory);
+    }
+
+    // Rotated hand bitmaps need drawBitmap2 with bilinear filtering (API 4.2.1) and run
+    // only where the beat runs (AMOLED). Which watches actually get hand bitmaps rather
+    // than the placeholder is decided per device in tools/export-assets.mjs.
+    private function smoothHandsSupported(dc as Dc) as Boolean {
+        return beatSupported() && (dc has :drawBitmap2) && (Graphics has :AffineTransform)
+            && (Graphics has :FILTER_MODE_BILINEAR);
     }
 
     function onUpdate(dc as Dc) as Void {

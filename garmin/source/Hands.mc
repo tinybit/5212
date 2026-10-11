@@ -1,6 +1,8 @@
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
+import Toybox.System;
+import Toybox.WatchUi;
 
 // The five hands of the 5212, ported from the measured shapes in
 // src/components/WeeklyCalendarWatch.tsx. All lengths below are photo pixels
@@ -113,11 +115,79 @@ module Hands {
         dc.fillPolygon(points);
     }
 
+    // Rotated hand bitmaps (the fēnix 9 Pro models; needs drawBitmap2, API 4.2.1+).
+    // fillPolygon rounds every vertex to a whole pixel, so a polygon hand jumps a pixel
+    // at a time and a thin blade changes thickness as it turns. The hour, minute and
+    // seconds hands are therefore drawn once by tools/export-assets.mjs, pointing at 12
+    // with the lit facet on the +lateral side, and shrunk and rotated about the pin here
+    // with bilinear filtering, which keeps fractional positions and a constant width.
+    // The mirrored transform serves the angles where the other facet faces the light.
+    var smooth = false;
+    var hourBitmap as BitmapResource?;
+    var minuteBitmap as BitmapResource?;
+    var secondsBitmap as BitmapResource?;
+    // Pin position inside each bitmap: [hourX, hourY, minuteX, minuteY, secondsX, secondsY].
+    var pivots as Array<Number> = [0, 0, 0, 0, 0, 0];
+    // Bitmap pixels per screen pixel; the transform shrinks the bitmap by this factor.
+    var bitmapScale as Number = 1;
+
+    function setupSmooth(hour as BitmapResource, minute as BitmapResource, seconds as BitmapResource,
+            handPivots as Array<Number>, scale as Number) as Void {
+        hourBitmap = hour;
+        minuteBitmap = minute;
+        secondsBitmap = seconds;
+        pivots = handPivots;
+        bitmapScale = scale;
+        smooth = true;
+    }
+
+    // Draws the bitmap rotated by angleDeg about its pin, which lands on the dial centre.
+    // Returns false, and switches the module back to polygon hands for good, when the
+    // watch rejects the call (an unexpected bitmap format on some firmware, say): a
+    // plain hand beats a crashed face.
+    function drawBitmapHand(dc as Dc, bitmap as BitmapResource, px as Number, py as Number, angleDeg as Float,
+            mirror as Boolean) as Boolean {
+        // Source pin -> (shrink, mirror, rotate) -> dial centre; the bitmap is drawn at the
+        // origin and the transform places it.
+        var t = new Graphics.AffineTransform();
+        t.translate(cx, cy);
+        t.rotate(Math.toRadians(angleDeg).toFloat());
+        if (mirror) {
+            t.scale(-1.0, 1.0);
+        }
+        if (bitmapScale != 1) {
+            t.scale(1.0 / bitmapScale, 1.0 / bitmapScale);
+        }
+        t.translate(-px.toFloat(), -py.toFloat());
+        try {
+            dc.drawBitmap2(0, 0, bitmap, {:transform => t, :filterMode => Graphics.FILTER_MODE_BILINEAR});
+        } catch (e) {
+            smooth = false;
+            System.println("bitmap hands disabled: " + e.getErrorMessage());
+            return false;
+        }
+        return true;
+    }
+
     function drawHour(dc as Dc, angleDeg as Float) as Void {
+        if (smooth) {
+            var a = Math.toRadians(angleDeg);
+            if (drawBitmapHand(dc, hourBitmap as BitmapResource, pivots[0], pivots[1], angleDeg,
+                    !positiveSideLit(Math.sin(a), Math.cos(a)))) {
+                return;
+            }
+        }
         drawHourFaceted(dc, angleDeg, facetLit, facetDark);
     }
 
     function drawMinute(dc as Dc, angleDeg as Float) as Void {
+        if (smooth) {
+            var a = Math.toRadians(angleDeg);
+            if (drawBitmapHand(dc, minuteBitmap as BitmapResource, pivots[2], pivots[3], angleDeg,
+                    !positiveSideLit(Math.sin(a), Math.cos(a)))) {
+                return;
+            }
+        }
         drawMinuteFaceted(dc, angleDeg, facetLit, facetDark);
     }
 
@@ -183,6 +253,10 @@ module Hands {
     }
 
     function drawSeconds(dc as Dc, angleDeg as Float) as Void {
+        if (smooth && drawBitmapHand(dc, secondsBitmap as BitmapResource, pivots[4], pivots[5], angleDeg, false)) {
+            drawHub(dc);
+            return;
+        }
         var a = Math.toRadians(angleDeg);
         var sn = Math.sin(a);
         var cs = Math.cos(a);

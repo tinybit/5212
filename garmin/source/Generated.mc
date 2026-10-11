@@ -77,4 +77,20 @@ module Generated {
         ] as Array<ResourceId>;
         return ids[day - 1];
     }
+
+    // Pin position inside the hand bitmaps for a screen width, as
+    // [hourX, hourY, minuteX, minuteY, secondsX, secondsY]; null for screen sizes
+    // without hand bitmaps. A watch that got the placeholder bitmaps instead draws
+    // polygon hands; the view tells by the placeholder's 1-pixel width.
+    function handPivots(width as Number) as Array<Number>? {
+        if (width == 416) { return [34, 210, 29, 322, 15, 326] as Array<Number>; }
+        if (width == 454) { return [36, 229, 31, 351, 16, 355] as Array<Number>; }
+        if (width == 466) { return [37, 235, 32, 360, 17, 364] as Array<Number>; }
+        return null;
+    }
+
+    // Bitmap pixels per screen pixel in the hand bitmaps (the watch shrinks them by this).
+    function handBitmapScale() as Number {
+        return 2;
+    }
 }

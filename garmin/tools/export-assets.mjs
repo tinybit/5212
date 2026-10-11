@@ -5,6 +5,9 @@
 //   resources-round-<W>x<H>/drawables/dial.png     dial at that screen size (one folder per size)
 //   resources-round-<W>x<H>/drawables/date-NN.png  the date window for day NN (1-31)
 //   resources-round-<W>x<H>/drawables/dial.xml     resource entries for the above
+//   resources-hands-<W>/drawables/hand-*.png       hour, minute and seconds hands, rotated on the watch (the fēnix
+//                                                  9 Pro models); resources-hands-none holds a placeholder for
+//                                                  every other watch, which draws polygon hands
 //   resources-icon-<N>/drawables/                  launcher icon at each icon size the devices use
 //   monkey.jungle                                  per-device icon folder assignments
 //   source/Generated.mc                            resource table for the date bitmaps
@@ -76,11 +79,32 @@ const devices = deviceIds.map((id) => {
     display: d.displayType,
     icon: d.launcherIcon.width,
     memory: memory.watchFace,
+    pngResources: Array.isArray(d.imageFormats) && d.imageFormats.includes("png"),
   };
 });
 
 const sizes = [...new Set(devices.map((d) => d.size))].sort((a, b) => a - b);
 const iconSizes = [...new Set(devices.map((d) => d.icon))].sort((a, b) => a - b);
+// Rotated hand bitmaps: only the watches this was built and tested on, the fēnix 9 Pro
+// models. They also need an AMOLED screen (the beat runs there) and a resource compiler
+// that keeps PNG resources as PNG, so the hands keep their 8-bit alpha; the default packing
+// reduces alpha to on/off and leaves jagged edges after rotation (the Forerunner 165/70 and
+// Instinct 3 AMOLED have no PNG packing). Every other watch gets the placeholder folder and
+// draws polygon hands, as before.
+const IMAGE_HAND_DEVICES = new Set(["fenix9pro43mm", "fenix9pro47mm", "fenix9pro51mm"]);
+const HANDS_NONE = "resources-hands-none";
+for (const d of devices) {
+  d.imageHands = IMAGE_HAND_DEVICES.has(d.id) && d.display !== "mip" && d.pngResources;
+  d.handsDir = d.imageHands ? `resources-hands-${d.size}` : HANDS_NONE;
+}
+for (const id of IMAGE_HAND_DEVICES) {
+  if (!devices.some((d) => d.id === id && d.imageHands)) {
+    throw new Error(`${id} should get image hands but does not qualify or is not in the manifest`);
+  }
+}
+const handSizes = [...new Set(devices.filter((d) => d.imageHands).map((d) => d.size))].sort(
+  (a, b) => a - b,
+);
 // Always-on dial brightness (AMOLED): the inverted dial's white level, 153/255 = 60%.
 // Garmin blanks an always-on face that uses more than 10% of the screen's luminance;
 // the simulator's burn-in test measures the whole always-on frame at about 9.8%.
@@ -107,6 +131,131 @@ function dateCrop(size) {
   const right = Math.ceil(((DATE_WINDOW_CLIP.right - (CX - R_DIAL_EDGE)) * size) / span);
   const bottom = Math.ceil(((DATE_WINDOW_CLIP.bottom - (CY - R_DIAL_EDGE)) * size) / span);
   return { x, y, w: right - x, h: bottom - y };
+}
+
+// ---------------------------------------------------------------------------
+// Hand bitmaps (AMOLED sizes). fillPolygon on the watch rounds every vertex to a
+// whole pixel, so polygon hands jump a pixel at a time and a thin blade changes
+// thickness as it turns. These hands are drawn here once, pointing at 12 with the
+// lit facet on the +lateral (right) side, and the watch rotates the bitmap about
+// the pin with drawBitmap2 and bilinear filtering (Hands.drawBitmapHand).
+// Geometry in photo pixels: the same constants as source/Hands.mc.
+
+const HAND = {
+  hour: { tip: 510, rear: -125, base: -15, halfWidth: 72, tipHalfWidth: 3 },
+  minute: { tip: 786, rear: -105, base: -25, halfWidth: 60 },
+  seconds: {
+    tip: 795,
+    neck: 44,
+    tipHalfWidth: 3.84912,
+    neckHalfWidth: 6.29856,
+    shoulder: -27,
+    tailEnd: -287,
+    tailPoint: -312,
+    shoulderHalfWidth: 13.5,
+    tailEndHalfWidth: 27,
+  },
+};
+// The web app's flat hand colours, as Hands.setup() uses them on full-colour screens.
+const HAND_COLOURS = { facetLit: "#8F908C", facetDark: "#20211F", seconds: "#1A1A19" };
+// Hands are drawn at this multiple of the bitmap scale and box-filtered down.
+const HAND_SUPERSAMPLE = 4;
+// The hand bitmaps hold this many pixels per screen pixel; the watch shrinks them by the
+// same factor while rotating. Measured on the fēnix 9 Pro 51 mm simulator: a 1:1 bitmap
+// comes out softer than the polygon hands (edge 2.1 px against 1.7), a 2x bitmap at least
+// as sharp (1.5 px). 4x would make the filter skip pixels.
+const HAND_SCALE = 2;
+
+// Bitmap size, pivot (the pin, at a whole-pixel corner) and polygons for the three
+// hands at one screen size. Thin parts keep a half-width of at least 0.75 screen px,
+// like Hands.halfWidth().
+function handSpecs(size) {
+  const s = size / (2 * R_DIAL_EDGE);
+  const hw = (w) => Math.max(w, 0.75 / s);
+  const sb = s * HAND_SCALE; // photo px -> bitmap px
+  const margin = 2 * HAND_SCALE;
+  const make = (name, tip, rear, maxHalfWidth, polys) => {
+    const width = 2 * Math.ceil(maxHalfWidth * sb + margin);
+    const px = width / 2;
+    const py = margin + Math.ceil(tip * sb);
+    const height = py + Math.ceil(-rear * sb) + margin;
+    const map = ([along, lateral]) => [px + lateral * sb, py - along * sb];
+    return {
+      name,
+      width,
+      height,
+      px,
+      py,
+      polys: polys.map((p) => ({ color: p.color, points: p.points.map(map) })),
+    };
+  };
+  const h = HAND.hour;
+  const m = HAND.minute;
+  const q = HAND.seconds;
+  return [
+    // Dark silhouette first, lit facet on top: same stacking as Hands.drawHourFaceted().
+    make("hour", h.tip, h.rear, h.halfWidth, [
+      {
+        color: HAND_COLOURS.facetDark,
+        points: [
+          [h.rear, 0],
+          [h.base, h.halfWidth],
+          [h.tip, h.tipHalfWidth],
+          [h.tip, -h.tipHalfWidth],
+          [h.base, -h.halfWidth],
+        ],
+      },
+      {
+        color: HAND_COLOURS.facetLit,
+        points: [
+          [h.rear, 0],
+          [h.base, h.halfWidth],
+          [h.tip, h.tipHalfWidth],
+          [h.tip, 0],
+        ],
+      },
+    ]),
+    make("minute", m.tip, m.rear, m.halfWidth, [
+      {
+        color: HAND_COLOURS.facetDark,
+        points: [
+          [m.rear, 0],
+          [m.base, m.halfWidth],
+          [m.tip, 0],
+          [m.base, -m.halfWidth],
+        ],
+      },
+      {
+        color: HAND_COLOURS.facetLit,
+        points: [
+          [m.rear, 0],
+          [m.tip, 0],
+          [m.base, m.halfWidth],
+        ],
+      },
+    ]),
+    make("seconds", q.tip, q.tailPoint, Math.max(q.tailEndHalfWidth, hw(q.neckHalfWidth)), [
+      {
+        color: HAND_COLOURS.seconds,
+        points: [
+          [q.tip, -hw(q.tipHalfWidth)],
+          [q.tip, hw(q.tipHalfWidth)],
+          [q.neck, hw(q.neckHalfWidth)],
+          [q.neck, -hw(q.neckHalfWidth)],
+        ],
+      },
+      {
+        color: HAND_COLOURS.seconds,
+        points: [
+          [q.shoulder, -q.shoulderHalfWidth],
+          [q.shoulder, q.shoulderHalfWidth],
+          [q.tailEnd, q.tailEndHalfWidth],
+          [q.tailPoint, 0],
+          [q.tailEnd, -q.tailEndHalfWidth],
+        ],
+      },
+    ]),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +403,39 @@ async function blackPixel() {
   });
 }
 
+// One hand bitmap: the polygons filled on a transparent canvas at HAND_SUPERSAMPLE
+// times the screen scale, then halved down to the screen scale.
+async function renderHand(spec) {
+  return work.evaluate(
+    ({ spec, factor }) => {
+      let c = document.createElement("canvas");
+      c.width = spec.width * factor;
+      c.height = spec.height * factor;
+      const ctx = c.getContext("2d");
+      for (const poly of spec.polys) {
+        ctx.fillStyle = poly.color;
+        ctx.beginPath();
+        poly.points.forEach(([x, y], i) =>
+          i === 0 ? ctx.moveTo(x * factor, y * factor) : ctx.lineTo(x * factor, y * factor),
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+      while (c.width > spec.width) {
+        const half = document.createElement("canvas");
+        half.width = c.width / 2;
+        half.height = c.height / 2;
+        const hctx = half.getContext("2d");
+        hctx.imageSmoothingQuality = "high";
+        hctx.drawImage(c, 0, 0, half.width, half.height);
+        c = half;
+      }
+      return c.toDataURL("image/png");
+    },
+    { spec, factor: HAND_SUPERSAMPLE },
+  );
+}
+
 const writeDataUrl = (file, dataUrl) =>
   fs.writeFileSync(file, Buffer.from(dataUrl.split(",")[1], "base64"));
 
@@ -294,6 +476,30 @@ for (let day = 1; day <= 31; day++) {
   process.stdout.write(`day ${day} `);
 }
 process.stdout.write("\n");
+
+// Hand bitmaps: one folder per screen size that has image-hand watches, plus the placeholder
+// folder for every other watch. Pivots go into Generated.mc.
+const handIds = { hour: "HandHour", minute: "HandMinute", seconds: "HandSeconds" };
+const handFile = (name) => `hand-${name}.png`;
+const HAND_PLACEHOLDER = "hand-placeholder.png";
+const handsDir = (size) => path.join(garminDir, `resources-hands-${size}`, "drawables");
+const noneDir = path.join(garminDir, HANDS_NONE, "drawables");
+const handsBySize = new Map();
+for (const size of handSizes) {
+  fs.rmSync(path.dirname(handsDir(size)), { recursive: true, force: true });
+  fs.mkdirSync(handsDir(size), { recursive: true });
+  const specs = handSpecs(size);
+  handsBySize.set(size, specs);
+  const preview = targets.find((t) => t.size === size).previewDir;
+  for (const spec of specs) {
+    const png = await renderHand(spec);
+    writeDataUrl(path.join(handsDir(size), handFile(spec.name)), png);
+    writeDataUrl(path.join(preview, handFile(spec.name)), png);
+  }
+}
+fs.rmSync(path.dirname(noneDir), { recursive: true, force: true });
+fs.mkdirSync(noneDir, { recursive: true });
+writeDataUrl(path.join(noneDir, HAND_PLACEHOLDER), placeholder);
 await browser.close();
 
 // ---------------------------------------------------------------------------
@@ -324,6 +530,37 @@ for (const t of targets) {
   );
 }
 
+// Hand bitmap entries. drawBitmap2 with a transform refuses palettised sources ("Source
+// must not use a color palette"), and the resource compiler palettises a few-colour PNG
+// unless told not to; "png" packing keeps the 8-bit alpha that smooth rotated edges need.
+const handsXml = (lines) =>
+  [
+    `<!-- ${generatedHeader("")}-->`.replace("<!--  ", "<!-- "),
+    "<drawables>",
+    ...lines,
+    "</drawables>",
+    "",
+  ].join("\n");
+for (const size of handSizes) {
+  fs.writeFileSync(
+    path.join(handsDir(size), "hands.xml"),
+    handsXml(
+      Object.entries(handIds).map(
+        ([name, id]) =>
+          `    <bitmap id="${id}" filename="${handFile(name)}" dithering="none" packingFormat="png" automaticPalette="false" />`,
+      ),
+    ),
+  );
+}
+fs.writeFileSync(
+  path.join(noneDir, "hands.xml"),
+  handsXml(
+    Object.values(handIds).map(
+      (id) => `    <bitmap id="${id}" filename="${HAND_PLACEHOLDER}" dithering="none" />`,
+    ),
+  ),
+);
+
 // Launcher icon per icon size: the base icon scaled to the device's icon box.
 const baseIcon = fs.readFileSync(
   path.join(garminDir, "resources", "drawables", "launcher_icon.svg"),
@@ -351,9 +588,11 @@ for (const n of iconSizes) {
   );
   written.add(dirName);
 }
-// Drop folders from screen sizes or icon sizes that no device uses any more.
+for (const size of handSizes) written.add(`resources-hands-${size}`);
+written.add(HANDS_NONE);
+// Drop folders from screen sizes, icon sizes or hand sizes that no device uses any more.
 for (const entry of fs.readdirSync(garminDir)) {
-  if (/^resources-(round-\d+x\d+|icon-\d+)$/.test(entry) && !written.has(entry)) {
+  if (/^resources-(round-\d+x\d+|icon-\d+|hands-(\d+|none))$/.test(entry) && !written.has(entry)) {
     fs.rmSync(path.join(garminDir, entry), { recursive: true, force: true });
   }
 }
@@ -363,12 +602,14 @@ fs.writeFileSync(
   [
     generatedHeader("#"),
     "# The dial bitmaps live in resources-round-<W>x<H>/, which the SDK's default.jungle",
-    "# already assigns to every device of that screen family. Only the launcher icon",
-    "# size differs between devices, so each device gets its icon folder here.",
+    "# already assigns to every device of that screen family. Each device gets its launcher",
+    "# icon folder here, and its hand folder: rotated hand bitmaps for the fēnix 9 Pro models,",
+    "# the placeholder (polygon hands) for every other watch.",
     "project.manifest = manifest.xml",
     "",
     ...devices.map(
-      (d) => `${d.id}.resourcePath = $(${d.id}.resourcePath);resources-icon-${d.icon}`,
+      (d) =>
+        `${d.id}.resourcePath = $(${d.id}.resourcePath);resources-icon-${d.icon};${d.handsDir}`,
     ),
     "",
   ].join("\n"),
@@ -395,6 +636,23 @@ fs.writeFileSync(
     ...dateAodIds.map((id) => `            Rez.Drawables.${id},`),
     "        ] as Array<ResourceId>;",
     "        return ids[day - 1];",
+    "    }",
+    "",
+    "    // Pin position inside the hand bitmaps for a screen width, as",
+    "    // [hourX, hourY, minuteX, minuteY, secondsX, secondsY]; null for screen sizes",
+    "    // without hand bitmaps. A watch that got the placeholder bitmaps instead draws",
+    "    // polygon hands; the view tells by the placeholder's 1-pixel width.",
+    "    function handPivots(width as Number) as Array<Number>? {",
+    ...[...handsBySize.entries()].map(
+      ([size, specs]) =>
+        `        if (width == ${size}) { return [${specs.map((h) => `${h.px}, ${h.py}`).join(", ")}] as Array<Number>; }`,
+    ),
+    "        return null;",
+    "    }",
+    "",
+    "    // Bitmap pixels per screen pixel in the hand bitmaps (the watch shrinks them by this).",
+    "    function handBitmapScale() as Number {",
+    `        return ${HAND_SCALE};`,
     "    }",
     "}",
     "",
@@ -431,7 +689,16 @@ fs.writeFileSync(
 console.log(
   JSON.stringify({
     devices: devices.length,
-    sizes: targets.map((t) => ({ size: t.size, dateCrop: t.crop, grey4: t.grey4 })),
+    sizes: targets.map((t) => ({
+      size: t.size,
+      dateCrop: t.crop,
+      grey4: t.grey4,
+      hands: handsBySize
+        .get(t.size)
+        ?.map((h) => `${h.name} ${h.width}x${h.height} pin ${h.px},${h.py}`),
+    })),
+    handScale: HAND_SCALE,
+    imageHands: devices.filter((d) => d.imageHands).map((d) => d.id),
     iconSizes,
     dithering: DITHERING,
   }),

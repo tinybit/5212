@@ -7,7 +7,7 @@ Connect IQ watch face built from the calibrated 5212 dial in this repo.
 </p>
 
 - **Dial:** the web dial without hands, rendered by `tools/export-assets.mjs` into one bitmap per screen size (`resources-round-<W>x<H>/`), plus one date-window bitmap per day (1–31).
-- **Hands:** all five hands are drawn on the watch as polygons from the measured shapes in `src/components/WeeklyCalendarWatch.tsx`, scaled to the screen, because not every target can rotate bitmaps.
+- **Hands:** the five hands come from the measured shapes in `src/components/WeeklyCalendarWatch.tsx`, scaled to the screen, and are drawn as polygons. On the fēnix 9 Pro (43, 47 and 51 mm) the hour, minute and seconds hands are instead small bitmaps that `tools/export-assets.mjs` renders once at twice the screen scale (`resources-hands-<size>/hand-*.png`) and the watch shrinks and rotates about the pin with bilinear filtering (`drawBitmap2`): the watch's polygon fill rounds every corner to a whole pixel, so polygon hands move in one-pixel jumps and a thin blade changes thickness as it turns, while the filtered bitmap keeps fractional positions and a constant width. The other watches, AMOLED included, keep polygon hands until the bitmaps have been tried on them.
 - **Calendar:** ISO week, weekday, and date follow the same formulas as the web dial (`source/Calendar.mc`).
 - **Colours:** MIP screens (64 colours) get the dial reduced to the palette's four greys, so the cream becomes white and blended edges stay grey instead of picking up tints; AMOLED screens get the web dial's colours and a hands-only always-on view.
 
