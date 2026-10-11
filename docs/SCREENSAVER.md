@@ -40,7 +40,7 @@ open "$(pwd)/build/5212 Weekly Calendar.saver"
 
 macOS opens the screen-saver installer. Approve replacing the existing copy when upgrading, then:
 
-1. Open **System Settings → Screen Saver**.
+1. Open **System Settings → Wallpaper → Screen Saver** (macOS 26) or **System Settings → Screen Saver** (macOS 13–15).
 2. Select **5212 Weekly Calendar**.
 3. Use **Preview** to verify the installation.
 

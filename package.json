@@ -13,6 +13,7 @@
     "build:dev": "vite build --mode development",
     "build:screensaver:web": "vite build --config vite.screensaver.config.ts",
     "build:screensaver": "npm run build:screensaver:web && bash macos/build-screensaver.sh",
+    "build:release": "bash scripts/build-release.sh",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

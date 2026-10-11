@@ -7,14 +7,19 @@ A pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Week
 ## Contents
 
 - [Overview](#overview)
-- [Quick start](#quick-start)
+- [Install](#install)
+  - [macOS screensaver](#macos-screensaver)
+  - [Garmin watch face](#garmin-watch-face)
+  - [Platform support](#platform-support)
+- [Run from source](#run-from-source)
 - [Web simulator](#web-simulator)
   - [Controls](#controls)
   - [3D view](#3d-view)
-- [macOS screensaver](#macos-screensaver)
-- [Garmin watch face](#garmin-watch-face)
+- [Building the macOS screensaver](#building-the-macos-screensaver)
+- [Building the Garmin watch face](#building-the-garmin-watch-face)
 - [Dial calibration](#dial-calibration)
 - [Repository layout](#repository-layout)
+- [Making a release](#making-a-release)
 - [Documentation](#documentation)
 
 ## Overview
@@ -43,7 +48,53 @@ What is reproduced:
 - Perpetual calendar: ISO week, weekday, and date stay synchronized with local time, including variable month lengths and leap years.
 - A 1–31 date wheel isolated from a movement photograph and composited under a transparent aperture with its original bevel shadow. Dates that do not exist in the current month are skipped.
 
-## Quick start
+## Install
+
+Prebuilt files for every version are on the [Releases page](https://github.com/tinybit/5212/releases/latest). Each file has a `.sha256` checksum beside it. The web simulator needs no install: open the [live demo](https://patek-5212.grok.me/).
+
+| File                                                      | What it is                                             | For                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| `5212-Weekly-Calendar-<version>-macos.saver.zip`          | macOS screensaver, universal (Apple Silicon and Intel) | macOS 13 or newer                                                |
+| `5212-Weekly-Calendar-<version>-garmin-fenix6pro.prg`     | Garmin watch face                                      | fēnix 6 Pro, 6 Pro Solar, 6 Pro Dual Power, 6 Sapphire, quatix 6 |
+| `5212-Weekly-Calendar-<version>-garmin-fenix9pro47mm.prg` | Garmin watch face                                      | fēnix 9 Pro 47 mm                                                |
+
+### macOS screensaver
+
+1. Download and unzip the `.saver.zip`.
+2. Double-click `5212 Weekly Calendar.saver` and approve the installation. When upgrading, approve the replacement.
+3. Select **5212 Weekly Calendar** in **System Settings → Wallpaper → Screen Saver** (macOS 26) or **System Settings → Screen Saver** (macOS 13–15).
+
+The bundle is signed ad hoc and is not notarized, so macOS may refuse to open it. In that case open **System Settings → Privacy & Security**, scroll to the Security section, click **Open Anyway**, and enter your password ([Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)).
+
+On macOS 26, System Settings can keep running the previous build after an upgrade. Quit System Settings, run `killall legacyScreenSaver 2>/dev/null || true`, and reopen it.
+
+### Garmin watch face
+
+The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Take the file for your watch from the table above; a file built for another model does not install.
+
+1. Quit Garmin Express completely, including its menu bar or tray icon. While it runs, the watch's storage is not reachable.
+2. Connect the watch with its USB cable and open its storage:
+   - **macOS:** Finder does not show the watch, because it uses MTP. Use [OpenMTP](https://openmtp.ganeshrvel.com/) (free, macOS 10.14 or newer; `brew install --cask openmtp`).
+   - **Windows:** the watch appears in File Explorer as a portable device. Not tested by us.
+   - **Linux:** not tested. The watch is an MTP device.
+3. Copy the `.prg` into the `GARMIN/APPS` folder on the watch, then eject and unplug it. The watch may move or rename the file after you unplug it; that is normal.
+4. On the watch, hold **MENU**, select **Watch Face**, press **UP** or **DOWN** until **5212** shows, then press **START** and select **Apply**.
+
+To remove the watch face later, use Garmin Express.
+
+Tested on a fēnix 6 Pro Solar from macOS. The fēnix 9 Pro 47 mm build has run only in Garmin's simulator so far.
+
+### Platform support
+
+|                                  | macOS              | Windows                    | Linux              |
+| -------------------------------- | ------------------ | -------------------------- | ------------------ |
+| Web simulator (live demo)        | Any modern browser | Any modern browser         | Any modern browser |
+| macOS screensaver                | macOS 13 or newer  | No                         | No                 |
+| Installing the Garmin watch face | OpenMTP (tested)   | File Explorer (not tested) | Not tested         |
+
+The watch face itself runs on the watch. The computer's operating system matters only for copying the file.
+
+## Run from source
 
 ```bash
 npm ci
@@ -103,9 +154,9 @@ The date ring renders at a calibrated radius and center offset that are fixed co
 - Built from the same calibrated geometry (`WATCH_GEOMETRY`, exported by `WeeklyCalendarWatch`): the dial is a disc textured with the dial-only reference, the date aperture is a real cutout with walls and a recessed rotating wheel, the hour markers are the measured four-facet prisms, and the hands use their measured silhouettes and ridge heights in physical stacking order.
 - The dial is shown caseless, closed by a slim dark rim and back. Hands run on live local time with the same seconds beat and calendar synchronization as the 2D view.
 
-## macOS screensaver
+## Building the macOS screensaver
 
-An offline, button-free build of the dial in a native `.saver` bundle. It uses the Mac's local time and bundles all dial imagery and the Indie Flower font. Requires macOS 13 or newer, Node.js, and the Xcode Command Line Tools.
+An offline, button-free build of the dial in a native `.saver` bundle. Prebuilt bundles are on the Releases page; see [Install](#install). It uses the Mac's local time and bundles all dial imagery and the Indie Flower font. Requires macOS 13 or newer, Node.js, and the Xcode Command Line Tools.
 
 ```bash
 npm ci
@@ -117,9 +168,9 @@ The last command opens the macOS screen-saver installer. Approve the replacement
 
 Full guide, including verification and troubleshooting: [docs/SCREENSAVER.md](docs/SCREENSAVER.md).
 
-## Garmin watch face
+## Building the Garmin watch face
 
-A Connect IQ watch face built from this dial. The dial and one date-window bitmap per day are rendered from the web build; the five hands are drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
+A Connect IQ watch face built from this dial. Prebuilt files and the steps to put one on a watch are under [Install](#install). The dial and one date-window bitmap per day are rendered from the web build; the five hands are drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
 
 | Device id       | Watch                                             | Screen                    |
 | --------------- | ------------------------------------------------- | ------------------------- |
@@ -132,7 +183,7 @@ RELEASE=1 ./garmin/build.sh fenix6pro  # release build for copying onto a watch
 ./garmin/export.sh                     # re-render the dial bitmaps after dial changes
 ```
 
-Requirements, installing on a watch, and the differences from the web dial: [garmin/README.md](garmin/README.md).
+Requirements, the per-device resource folders, and the differences from the web dial: [garmin/README.md](garmin/README.md).
 
 ## Dial calibration
 
@@ -176,6 +227,15 @@ Reference assets in `public/`:
 | `date-ring-overlay.png`               | Transparent annular crop containing only the date numerals and ring                |
 | `date-window-shadow.png`              | Extracted aperture bevel and inner-edge shadow, rendered above the wheel           |
 | `main-dial-*.png`, `date-wheel-*.png` | Normal, height, material, and albedo maps for the 3D view, generated by `scripts/` |
+
+## Making a release
+
+```bash
+npm run build:release -- v1.2.0
+gh release create v1.2.0 dist-release/* --title "5212 Weekly Calendar v1.2.0" --notes-file notes.md
+```
+
+`scripts/build-release.sh` builds the screensaver bundle and one watch-face file per device in `garmin/manifest.xml`, zips the bundle, and writes a `.sha256` beside each asset in `dist-release/` (git-ignored). It needs the toolchains from [docs/SCREENSAVER.md](docs/SCREENSAVER.md) and [garmin/README.md](garmin/README.md), including the Connect IQ developer key.
 
 ## Documentation
 

@@ -44,7 +44,4 @@ RELEASE=1 ./garmin/build.sh fenix6pro  # release build: garmin/release/5212-feni
 
 ## Installing on a watch
 
-1. Make a release build for the watch's device id.
-2. Quit Garmin Express. On macOS, open the watch with OpenMTP (watches with music use MTP, which Finder does not show).
-3. Copy the `.prg` into `GARMIN/APPS` on the watch and unplug it.
-4. On the watch: hold **MENU** → **Watch Face** → select **5212** → **START** → **Apply**.
+Release builds (`RELEASE=1 ./garmin/build.sh <device>`) land in `garmin/release/`. The steps to copy one onto a watch, per operating system, are in the main README under [Install → Garmin watch face](../README.md#garmin-watch-face). `scripts/build-release.sh` builds every device for a GitHub release.
