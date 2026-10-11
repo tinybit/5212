@@ -1,68 +1,109 @@
 # 5212 — Patek Philippe Weekly Calendar Dial
 
-Pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Weekly Calendar Ref. 5212A-001**.
+A pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Weekly Calendar Ref. 5212A-001**. One measured dial drives a web simulator, a macOS screensaver, and a Garmin watch face.
 
-The app overlays a programmatic React/SVG dial on a 2911×2683 orthographic reference photograph. The photo, drawing, guides, and individual hands can be toggled independently for alignment work. The long-term target is a clean dial bitmap plus rotatable hand assets for a Garmin Fenix 7/8 watch face.
+## Contents
 
-<p align="center">
-  <img src="docs/screenshots/watch-display.png" alt="Weekly calendar watch simulator" width="48%">
-  <img src="docs/screenshots/watch-controls.png" alt="Watch simulator lighting and calibration controls" width="48%">
-</p>
+- [Overview](#overview)
+- [Quick start](#quick-start)
+- [Web simulator](#web-simulator)
+  - [Controls](#controls)
+  - [3D view](#3d-view)
+- [macOS screensaver](#macos-screensaver)
+- [Garmin watch face](#garmin-watch-face)
+- [Dial calibration](#dial-calibration)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
 
-## Current state
-
-Implemented and calibrated:
-
-- Concentric day, week, month, minute, and dial-edge geometry.
-- Month, week, and weekday sector divisions.
-- Filled week separator dots and minute markers.
-- Four-facet applied hour batons, including the double marker at 12 and the date-window omission at 3.
-- Week numerals, month names, and weekday names rendered in **Indie Flower**, with measured per-glyph centers and manual optical corrections.
-- Cream reference background and matching page background.
-- Five independently rendered hands in the correct stack:
-  1. Day-of-week hand
-  2. Week-of-year/month hand
-  3. Hour hand
-  4. Minute hand
-  5. Seconds hand
-- Local-time hour and minute positioning.
-- Mechanical seconds motion at eight steps per second, matching the 4 Hz / 28,800 semi-oscillations-per-hour caliber 26-330 S C J SE.
-- Perpetual local-calendar synchronization for the exact ISO week, weekday, and date, including variable month lengths and leap years.
-- An aligned 1–31 date wheel isolated from the supplied movement photograph and composited beneath a transparent Reference 2 aperture with its original bevel shadow. Invalid end-of-month dates are skipped automatically.
-
-Garmin watch face ([garmin/README.md](garmin/README.md)):
-
-- Dial and per-day date-window bitmaps exported from this dial for the fēnix 6 Pro (260×260 MIP) and the fēnix 9 Pro 47 mm (454×454 AMOLED).
-- All five hands drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
-- 64-colour MIP and full-colour AMOLED variants, with a hands-only always-on view on AMOLED.
+## Overview
 
 <p align="center">
-  <img src="docs/screenshots/garmin-fenix9pro47mm-simulator.webp" alt="5212 watch face in the Connect IQ simulator on a fēnix 9 Pro 47 mm" width="48%">
+  <img src="docs/screenshots/watch-display.png" alt="The web simulator" width="44%">
+  <img src="docs/screenshots/garmin-fenix9pro47mm-simulator.webp" alt="The watch face in the Connect IQ simulator on a fēnix 9 Pro 47 mm" width="34%">
 </p>
+<p align="center"><sub>Left: the web simulator. Right: the watch face in Garmin's simulator on a fēnix 9 Pro 47 mm.</sub></p>
 
-## Run locally
+The dial is drawn programmatically (React + SVG) on top of a 2911 × 2683 orthographic photograph of the real watch. Every radius, sector line, glyph center, and hand silhouette was measured against that photograph and locked in [docs/PROCESS.md](docs/PROCESS.md). The same geometry feeds three outputs:
+
+| Output            | What it is                                                                                                           | Guide                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Web simulator     | The calibrated dial over the reference photo, with live time, perpetual calendar, a 3D model, and alignment controls | [Web simulator](#web-simulator)            |
+| macOS screensaver | An offline, button-free build of the dial in a native `.saver` bundle                                                | [docs/SCREENSAVER.md](docs/SCREENSAVER.md) |
+| Garmin watch face | The dial and hands on a fēnix 6 Pro or fēnix 9 Pro                                                                   | [garmin/README.md](garmin/README.md)       |
+
+What is reproduced:
+
+- Concentric day, week, month, minute, and dial-edge geometry; month, week, and weekday sector divisions; week separator dots and minute markers.
+- Four-facet applied hour batons, including the double marker at 12 and the omitted marker at the 3 o'clock date window.
+- Week numerals, month names, and weekday names in **Indie Flower**, with measured per-glyph centers and manual optical corrections.
+- Five hands in their physical stacking order: day-of-week, week-of-year, hour, minute, seconds.
+- Mechanical seconds motion at eight steps per second, matching the 4 Hz (28,800 vph) caliber 26-330 S C J SE.
+- Perpetual calendar: ISO week, weekday, and date stay synchronized with local time, including variable month lengths and leap years.
+- A 1–31 date wheel isolated from a movement photograph and composited under a transparent aperture with its original bevel shadow. Dates that do not exist in the current month are skipped.
+
+## Quick start
 
 ```bash
+npm ci
 npm run dev
 ```
 
-The Vite preview is configured for `0.0.0.0:8080`.
+The dev server listens on `0.0.0.0:8080`; open <http://localhost:8080>.
 
-Useful verification commands:
+Checks:
 
 ```bash
-npm test
+npm test          # Vitest: calendar and lighting suites
 npm run typecheck
 npm run lint
 ```
 
-The Vitest lighting suite guards aperture-shadow continuity at the zenith, zero-brightness behavior, hour-hand facet planarity, and back-face specular masking.
+The lighting suite guards aperture-shadow continuity at the zenith, zero-brightness behavior, hour-hand facet planarity, and back-face specular masking.
+
+## Web simulator
+
+Two persistent buttons sit on the page: `⚙️` shows or hides the **Controls** window, and `3D` switches to the [3D view](#3d-view). The default view is Photo 100%, Reference 2, Drawing on, Text off, Guides off, Hands on, 3D markers, controls hidden.
+
+### Controls
+
+The **Controls** window drags by its header, including past the screen edges, and has three tabs.
+
+**Time**
+
+- `10x` – `100,000x` accelerate the simulated timeline from the local time captured when the page opened. Pressing the active multiplier again returns to real time.
+- `Now` resets the simulated instant and every manual hand or date override to the current local time, keeping the selected speed.
+- `Pause` / `Continue` freeze and resume the timeline. Speed changes and pause/continue keep the current simulated instant instead of snapping back to the computer clock.
+- The hand selector shows any hand's current angle; `Live` returns a manually positioned hand to its live clock or calendar angle.
+- `Week +1`, `Day +1`, and `Date +1` advance their displays by one step. Manual date and weekday positions return to live sync at the next simulated local date boundary; a manual week position returns at the next ISO-week boundary.
+- The eight-step seconds beat runs through 10x. Above that the seconds hand rotates continuously, so fast playback has no artificial pauses.
+
+**Layers**
+
+- `Photo` cycles 100% → 50% → off.
+- `Reference` switches between the complete watch photo and the aligned dial-only reference.
+- `Drawing` toggles rails, sectors, markers, batons, and center geometry. `Text` toggles the generated week, month, and weekday glyphs. `Guides` shows the glyph-center calibration overlay.
+- `Hands` toggles the whole hand stack, with individual `Week`, `Day`, `Hour`, `Minute`, and `Second` toggles beneath it.
+- `Markers: Flat / 3D` switches the hour markers between the flat calibration artwork and physically lit prisms, and the hour and minute hands between flat artwork and raised two-facet prisms.
+
+The date ring renders at a calibrated radius and center offset that are fixed constants in the component.
+
+**Light**
+
+- Positions a broad light source on a hemisphere and sets its brightness.
+- In 3D marker mode, every marker and hand updates its polished black-metal reflection independently; the flat seconds hand gets a restrained deep-black PVD response.
+- Adjusts the date-window shading.
+
+### 3D view
+
+- A rotatable three.js model of the watch (`src/components/Watch3D.tsx`). Trackball controls tumble it freely with no pole lock, including around to the dark case back; scroll zooms and right-drag pans.
+- Opens straight-on with 12 o'clock up; `Reset view` returns to that framing.
+- `⚙️` opens the 3D settings: visibility toggles for the markers, the date wheel, and each hand, plus key-light direction, elevation, intensity, and ambient sliders.
+- Built from the same calibrated geometry (`WATCH_GEOMETRY`, exported by `WeeklyCalendarWatch`): the dial is a disc textured with the dial-only reference, the date aperture is a real cutout with walls and a recessed rotating wheel, the hour markers are the measured four-facet prisms, and the hands use their measured silhouettes and ridge heights in physical stacking order.
+- The dial is shown caseless, closed by a slim dark rim and back. Hands run on live local time with the same seconds beat and calendar synchronization as the 2D view.
 
 ## macOS screensaver
 
-The repository can build a native `.saver` bundle containing an offline, button-free version of the watch. It uses the Mac's local time and includes all dial imagery and the Indie Flower font inside the bundle.
-
-Requirements: macOS 13 or newer, Node.js, and the Xcode Command Line Tools.
+An offline, button-free build of the dial in a native `.saver` bundle. It uses the Mac's local time and bundles all dial imagery and the Indie Flower font. Requires macOS 13 or newer, Node.js, and the Xcode Command Line Tools.
 
 ```bash
 npm ci
@@ -70,62 +111,72 @@ npm run build:screensaver
 open "$(pwd)/build/5212 Weekly Calendar.saver"
 ```
 
-The final command opens macOS's screen-saver installer. Approve replacing the existing copy when upgrading, then select **5212 Weekly Calendar** in **System Settings → Screen Saver**. The generated bundle is universal and runs natively on both Apple Silicon and Intel Macs.
+The last command opens the macOS screen-saver installer. Approve the replacement when upgrading, then select **5212 Weekly Calendar** under **System Settings → Screen Saver**. The bundle is universal and runs natively on Apple Silicon and Intel Macs.
 
-See [Building and installing the macOS screensaver](docs/SCREENSAVER.md) for prerequisites, architecture, rebuilding, verification, and troubleshooting.
+Full guide, including verification and troubleshooting: [docs/SCREENSAVER.md](docs/SCREENSAVER.md).
 
-## Controls
+## Garmin watch face
 
-All controls live in a single draggable **Controls** window, shown or hidden by the persistent `⚙️` button. The window drags by its header — including past the screen edges — and groups its controls into three tabs:
+A Connect IQ watch face built from this dial. The dial and one date-window bitmap per day are rendered from the web build; the five hands are drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
 
-1. **Time** — timeline speed, pause/continue, hand inspection, and calendar advances.
-2. **Layers** — display layers, individual hand visibility, and the marker rendering mode.
-3. **Light** — the hemisphere light position, brightness, and date-window shading.
+| Device id       | Watch                                             | Screen                    |
+| --------------- | ------------------------------------------------- | ------------------------- |
+| `fenix6pro`     | fēnix 6 Pro / 6 Pro Solar / 6 Sapphire / quatix 6 | 260 × 260 MIP, 64 colours |
+| `fenix9pro47mm` | fēnix 9 Pro 47 mm                                 | 454 × 454 AMOLED          |
 
-The **Time** tab accelerates the simulated watch timeline from the local time captured when the page opens with `10x`–`100,000x` multipliers; pressing the active multiplier again returns to real-time speed. `Now` resets the simulated instant and all manual hand/date overrides to the current local time while preserving the selected speed. The mechanical eight-step seconds animation remains active through 10x, then switches to continuous simulated rotation above 10x so high-speed playback has no artificial beat pauses. The hand selector shows any hand's current angle, `Pause`/`Continue` freeze and resume the simulated timeline, and `Live` returns a manually positioned hand to its live clock/calendar angle. `Week +1`, `Day +1`, and `Date +1` advance their displays by one step; manual date and weekday positioning returns to live synchronization at the next simulated local date boundary, and manual week positioning returns at the next ISO-week boundary. Speed changes and pause/continue preserve the current simulated instant instead of snapping back to the computer clock.
+```bash
+./garmin/run.sh fenix9pro47mm          # build and load into the Connect IQ simulator
+RELEASE=1 ./garmin/build.sh fenix6pro  # release build for copying onto a watch
+./garmin/export.sh                     # re-render the dial bitmaps after dial changes
+```
 
-The **Layers** tab cycles `Photo` through 100%, 50%, and OFF, and `Reference` between the complete watch photo and the aligned dial-only reference. `Drawing` controls rails, sectors, markers, batons, and center geometry, while `Text` independently controls generated week, month, and weekday glyphs, and `Guides` shows the glyph-center calibration overlay. `Hands` toggles the complete hand stack, with individual `Week`, `Day`, `Hour`, `Minute`, and `Second` toggles beneath it. `Markers: Flat / 3D` switches between the original flat calibration markers and physically lit prisms; it also switches the hour and minute hands between their original flat artwork and raised two-facet prisms. The date ring renders at its calibrated radius and center offset, which are fixed constants in the component.
+Requirements, installing on a watch, and the differences from the web dial: [garmin/README.md](garmin/README.md).
 
-The **Light** tab positions a broad source on a hemisphere and controls its brightness; in 3D marker mode, changes update polished black-metal reflections independently on every marker and hand, with a restrained deep-black PVD response on the flat seconds hand.
+## Dial calibration
 
-The default view is Photo 100%, Reference 2, Drawing ON, Text OFF, Guides OFF, Hands ON, 3D markers, and the controls window hidden.
-
-## 3D view
-
-The persistent `3D` button in the top-right corner switches to a rotatable three.js model of the watch (`src/components/Watch3D.tsx`). Trackball-style controls tumble the watch freely in any direction with no pole lock — including fully around to its dark case back — with scroll to zoom and right-drag to pan. The view opens straight-on with 12 o'clock up, and `Reset view` returns to exactly that framing. A `⚙️` button opens the 3D settings panel: visibility toggles for the markers, date wheel, and each of the five hands, plus key-light direction, elevation, intensity, and ambient sliders. The model reuses the calibrated photo-pixel geometry exported from `WeeklyCalendarWatch` (`WATCH_GEOMETRY`): the dial is a disc textured with the aligned dial-only reference, the date aperture is a real cutout with walls and a recessed rotating date wheel, the hour markers are the measured four-facet prisms, and all five hands are built from their measured silhouettes and ridge heights at their physical stacking order. The dial is presented caseless, closed by a slim dark rim and back. Hands run on live local time with the same eight-step seconds beat and perpetual week/day/date synchronization as the simulator.
-
-## Key files
-
-- `src/components/WeeklyCalendarWatch.tsx` — geometry, measured coordinates, hand shapes, clock calculations, and SVG rendering.
-- `src/components/WatchStage.tsx` — page layout and cream background.
-- `src/screensaver.tsx` — standalone button-free screensaver entry point.
-- `macos/WatchScreensaver/` — native `ScreenSaverView` wrapper.
-- `macos/build-screensaver.sh` — universal `.saver` bundle builder.
-- `src/routes/__root.tsx` — document shell and Google Fonts import.
-- `src/styles.css` — global styling and font variables.
-- `public/reference-ortho.jpg` — original orthographic baseline.
-- `public/reference-ortho-cream.jpg` — working reference with the exterior changed to dial cream.
-- `public/reference-handless.png` — aligned dial-only reference on the same cream canvas.
-- `public/date-ring-overlay.png` — transparent annular crop containing only the supplied date numerals and ring.
-- `public/reference-handless-date-cutout.png` — Reference 2 with a measured transparent date aperture.
-- `public/date-window-shadow.png` — extracted aperture bevel and inner-edge shadow rendered above the wheel.
-- `scripts/create_date_window_layers.py` — reproducibly generates the cutout and shadow assets.
-- `docs/PROCESS.md` — measurement conventions, locked constants, rendering details, and implementation history.
-
-## Coordinate system
-
-All geometry uses native pixels from `reference-ortho.jpg`:
+All geometry uses native pixels of `public/reference-ortho.jpg`:
 
 - Image: **2911 × 2683**
 - Shared center: **(1381, 1331)**
-- 0°: 12 o’clock
-- Positive rotation: clockwise
-- Polar conversion: subtract 90° before standard Cartesian `cos`/`sin`
+- 0° at 12 o'clock, positive rotation clockwise
+- Polar conversion: subtract 90° before the standard Cartesian `cos` / `sin`
 
-The photographed pin is a few pixels away from the shared geometric center because the source is not perfectly orthographic. Programmatic layers intentionally use the shared center.
+The photographed pin sits a few pixels from the shared geometric center because the source is not perfectly orthographic; programmatic layers use the shared center on purpose.
 
-## Reference limitations
+The source also keeps slight perspective and lens distortion, and the case bezel hides part of the printed dial edge, so one set of circles cannot match every side perfectly. The current constants are the visually approved compromise. Do not re-center the whole dial to fix an isolated 1–3 px discrepancy.
 
-The source retains slight perspective and lens distortion, and the case bezel obscures part of the printed dial edge. A single set of circles cannot match every side perfectly. The current constants are the visually approved compromise; do not re-center the whole dial to correct an isolated 1–3px discrepancy.
+The complete calibration record (locked constants, glyph centers, hand specifications, and the history behind them) is [docs/PROCESS.md](docs/PROCESS.md).
 
-See `docs/PROCESS.md` for the complete calibrated geometry and hand specifications.
+## Repository layout
+
+```
+src/components/WeeklyCalendarWatch.tsx   dial geometry, measured constants, hand shapes, clock, SVG rendering, controls
+src/components/Watch3D.tsx               rotatable three.js model built from WATCH_GEOMETRY
+src/components/watchCalendar.ts          ISO-week, calendar-day, and date-wheel angle helpers
+src/components/watchLighting.ts          vector math and lighting types shared by the 2D and 3D views
+src/components/WatchStage.tsx            page layout and the 2D / 3D switch
+src/screensaver.tsx                      button-free screensaver entry point
+macos/                                   native ScreenSaverView wrapper and the .saver bundle builder
+garmin/                                  Connect IQ watch face: sources, per-device bitmaps, build and export scripts
+public/                                  reference photographs and derived layers (table below)
+scripts/                                 asset generators: date-window layers, main-dial and date-wheel maps
+docs/                                    calibration record, screensaver guide, screenshots
+```
+
+Reference assets in `public/`:
+
+| File                                  | Role                                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `reference-ortho.jpg`                 | Original orthographic baseline; all measurements refer to it                       |
+| `reference-ortho-cream.jpg`           | Working reference with the exterior changed to dial cream                          |
+| `reference-handless.png`              | Aligned dial-only reference on the same cream canvas                               |
+| `reference-handless-date-cutout.png`  | Dial-only reference with a measured transparent date aperture (Reference 2)        |
+| `date-ring-overlay.png`               | Transparent annular crop containing only the date numerals and ring                |
+| `date-window-shadow.png`              | Extracted aperture bevel and inner-edge shadow, rendered above the wheel           |
+| `main-dial-*.png`, `date-wheel-*.png` | Normal, height, material, and albedo maps for the 3D view, generated by `scripts/` |
+
+## Documentation
+
+- [docs/PROCESS.md](docs/PROCESS.md) — measurement conventions, locked geometry, glyph and hand specifications, implementation history.
+- [docs/SCREENSAVER.md](docs/SCREENSAVER.md) — building, installing, verifying, and troubleshooting the macOS screensaver.
+- [garmin/README.md](garmin/README.md) — the Garmin watch face: targets, requirements, commands, and installing on a watch.
