@@ -85,13 +85,33 @@ const devices = deviceIds.map((id) => {
 
 const sizes = [...new Set(devices.map((d) => d.size))].sort((a, b) => a - b);
 const iconSizes = [...new Set(devices.map((d) => d.icon))].sort((a, b) => a - b);
-// Rotated hand bitmaps: only the watches this was built and tested on, the fēnix 9 Pro
-// models. They also need an AMOLED screen (the beat runs there) and a resource compiler
+// Rotated hand bitmaps: the fēnix 9 Pro (tested on a 51 mm) and the AMOLED watches of
+// the same generation: software level 6.0, full alpha blending, PNG resources, same
+// memory budget. They need an AMOLED screen (the beat runs there) and a resource compiler
 // that keeps PNG resources as PNG, so the hands keep their 8-bit alpha; the default packing
 // reduces alpha to on/off and leaves jagged edges after rotation (the Forerunner 165/70 and
 // Instinct 3 AMOLED have no PNG packing). Every other watch gets the placeholder folder and
-// draws polygon hands, as before.
-const IMAGE_HAND_DEVICES = new Set(["fenix9pro43mm", "fenix9pro47mm", "fenix9pro51mm"]);
+// draws polygon hands, as before. Older AMOLED generations (epix 2, Forerunner 265/965,
+// Venu 2/3, vívoactive 5, MARQ 2) qualify on paper but wait for a report from a real watch.
+const IMAGE_HAND_DEVICES = new Set([
+  "fenix9pro43mm",
+  "fenix9pro47mm",
+  "fenix9pro51mm",
+  "fenix943mm",
+  "fenix947mm",
+  "fenix843mm",
+  "fenix847mm",
+  "fenix8pro47mm",
+  "fenixe",
+  "fr970",
+  "fr57042mm",
+  "fr57047mm",
+  "fr170",
+  "fr170m",
+  "venu441mm",
+  "venu445mm",
+  "vivoactive6",
+]);
 const HANDS_NONE = "resources-hands-none";
 for (const d of devices) {
   d.imageHands = IMAGE_HAND_DEVICES.has(d.id) && d.display !== "mip" && d.pngResources;
@@ -603,7 +623,7 @@ fs.writeFileSync(
     generatedHeader("#"),
     "# The dial bitmaps live in resources-round-<W>x<H>/, which the SDK's default.jungle",
     "# already assigns to every device of that screen family. Each device gets its launcher",
-    "# icon folder here, and its hand folder: rotated hand bitmaps for the fēnix 9 Pro models,",
+    "# icon folder here, and its hand folder: rotated hand bitmaps for the fēnix 8/9 generation,",
     "# the placeholder (polygon hands) for every other watch.",
     "project.manifest = manifest.xml",
     "",

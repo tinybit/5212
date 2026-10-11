@@ -8,10 +8,11 @@ import Toybox.WatchUi;
 
 // Patek Philippe 5212A weekly-calendar dial: a static dial bitmap rendered
 // from the web reconstruction, a date-window bitmap per day, and five hands.
-// The hands are polygons, except on the fēnix 9 Pro models, where the hour,
-// minute and seconds hands are pre-rendered bitmaps rotated with sub-pixel
-// precision (see Hands.drawBitmapHand). AMOLED watches get a second, inverted
-// dial bitmap for the always-on view.
+// The hands are polygons, except on the fēnix 8/9 generation of AMOLED watches
+// (chosen per device in tools/export-assets.mjs), where the hour, minute and
+// seconds hands are pre-rendered bitmaps rotated with sub-pixel precision (see
+// Hands.drawBitmapHand). AMOLED watches get a second, inverted dial bitmap for
+// the always-on view.
 class Face5212View extends WatchUi.WatchFace {
 
     // Photo-pixel geometry from WeeklyCalendarWatch.tsx, used for the date-window position.
@@ -47,7 +48,7 @@ class Face5212View extends WatchUi.WatchFace {
     // on that boundary, so this converges within a second and then stays put.
     private var _phaseMs as Long = 0x7FFFFFFFFFFFFFFFl;
     // Day and week pointers glide to a new position when the change happens while the
-    // watch is awake, where the image hands run (the fēnix 9 Pro): 400 ms with the web
+    // watch is awake, where the image hands run (fēnix 8/9 generation): 400 ms with the web
     // dial's ease-out curve, redrawn 20 times a second by _glideTimer (see Glide.mc).
     // Asleep they jump, and after waking they are simply drawn where they belong.
     private const GLIDE_TICK_MS = 50;

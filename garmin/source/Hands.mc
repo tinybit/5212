@@ -115,7 +115,8 @@ module Hands {
         dc.fillPolygon(points);
     }
 
-    // Rotated hand bitmaps (the fēnix 9 Pro models; needs drawBitmap2, API 4.2.1+).
+    // Rotated hand bitmaps (the fēnix 8/9 generation of AMOLED watches, chosen per device
+    // in tools/export-assets.mjs; needs drawBitmap2, API 4.2.1+).
     // fillPolygon rounds every vertex to a whole pixel, so a polygon hand jumps a pixel
     // at a time and a thin blade changes thickness as it turns. The hour, minute and
     // seconds hands are therefore drawn once by tools/export-assets.mjs, pointing at 12
