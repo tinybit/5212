@@ -76,8 +76,12 @@ class Face5212View extends WatchUi.WatchFace {
         var month = info.month as Number;
         var day = info.day as Number;
         var dayOfWeek = info.day_of_week as Number;
-        var hourAngle = ((hour % 12) + min / 60.0 + sec / 3600.0) * 30.0;
-        var minuteAngle = (min + sec / 60.0) * 6.0;
+        // Seconds with the eighth-of-a-second fraction where the beat is supported, so
+        // the hour and minute hands creep forward with every beat like geared hands
+        // instead of stepping once a second. Elsewhere plain whole seconds.
+        var secF = beatSupported() ? preciseSeconds(sec, now) : sec * 1.0;
+        var hourAngle = ((hour % 12) + min / 60.0 + secF / 3600.0) * 30.0;
+        var minuteAngle = (min + secF / 60.0) * 6.0;
         var dayAngle = Calendar.dayHandAngle(dayOfWeek);
         var weekAngle = Calendar.weekHandAngle(year, month, day, dayOfWeek);
 
@@ -134,10 +138,8 @@ class Face5212View extends WatchUi.WatchFace {
         if (lowPower) {
             // Low-power mode redraws once a minute, so the seconds hand would be wrong.
             Hands.drawHub(dc);
-        } else if (beatSupported()) {
-            Hands.drawSeconds(dc, secondsAngle(sec, now));
         } else {
-            Hands.drawSeconds(dc, sec * 6.0);
+            Hands.drawSeconds(dc, secF * 6.0);
         }
     }
 
@@ -148,10 +150,10 @@ class Face5212View extends WatchUi.WatchFace {
         return _burnInProtection && (System has :getDisplayMode);
     }
 
-    // Seconds-hand angle in eighths of a second. The clock gives whole seconds;
-    // the millisecond timer, anchored to the clock boundary by _phaseMs, gives
-    // how far into the second we are.
-    private function secondsAngle(sec as Number, now as Time.Moment) as Float {
+    // Seconds in eighths: the clock gives whole seconds; the millisecond timer,
+    // anchored to the clock boundary by _phaseMs, gives how far into the second
+    // we are. Drives the seconds hand and the slow creep of the other two hands.
+    private function preciseSeconds(sec as Number, now as Time.Moment) as Float {
         var d = System.getTimer().toLong() - now.value().toLong() * 1000l;
         if (d < _phaseMs) {
             _phaseMs = d;
@@ -160,7 +162,7 @@ class Face5212View extends WatchUi.WatchFace {
         if (beats > BEATS_PER_SECOND - 1) {
             beats = BEATS_PER_SECOND - 1;
         }
-        return (sec + beats / (BEATS_PER_SECOND * 1.0)) * 6.0;
+        return sec + beats / (BEATS_PER_SECOND * 1.0);
     }
 
     function onBeat() as Void {
