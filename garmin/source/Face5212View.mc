@@ -3,11 +3,13 @@ import Toybox.Lang;
 import Toybox.System;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
+import Toybox.Timer;
 import Toybox.WatchUi;
 
 // Patek Philippe 5212A weekly-calendar dial: a static dial bitmap rendered
 // from the web reconstruction, a date-window bitmap per day, and five hands
 // drawn as polygons (bitmaps cannot be rotated on every target watch).
+// AMOLED watches get a second, inverted dial bitmap for the always-on view.
 class Face5212View extends WatchUi.WatchFace {
 
     // Photo-pixel geometry from WeeklyCalendarWatch.tsx, used for the date-window position.
@@ -17,14 +19,31 @@ class Face5212View extends WatchUi.WatchFace {
     private const DATE_CLIP_LEFT = 2017;
     private const DATE_CLIP_TOP = 1264;
 
+    // The calibre 26-330 beats at 4 Hz (28,800 half-swings an hour): the seconds
+    // hand advances eight times a second. While the watch is awake we redraw at
+    // that rate; in low power the seconds hand is hidden anyway.
+    // Only on the modern AMOLED watches (the ones this was built and tested on):
+    // older and MIP watches keep the plain once-a-second hand. See beatSupported().
+    private const BEATS_PER_SECOND = 8;
+    private const BEAT_MS = 1000 / BEATS_PER_SECOND;
+
     private var _dial as BitmapResource?;
     private var _date as BitmapResource?;
     private var _dateDay as Number = 0;
+    private var _dialAod as BitmapResource?;
+    private var _dateAod as BitmapResource?;
+    private var _dateAodDay as Number = 0;
     private var _dateX as Number = 0;
     private var _dateY as Number = 0;
     private var _awake as Boolean = true;
-    // AMOLED screens: full colours awake, and a mostly black always-on view.
+    // AMOLED screens: full colours awake, and the inverted always-on dial in sleep.
     private var _burnInProtection as Boolean = false;
+    // Beat timer (awake only; starting a timer in low power crashes a watch face).
+    private var _beat as Timer.Timer?;
+    // Smallest (millisecond timer - clock seconds * 1000) seen so far: the timer
+    // value at a clock-second boundary. The watch's own once-a-second redraw lands
+    // on that boundary, so this converges within a second and then stays put.
+    private var _phaseMs as Long = 0x7FFFFFFFFFFFFFFFl;
 
     function initialize() {
         WatchFace.initialize();
@@ -39,18 +58,28 @@ class Face5212View extends WatchUi.WatchFace {
         _dateX = ((DATE_CLIP_LEFT - DIAL_LEFT) * width) / DIAL_SPAN;
         _dateY = ((DATE_CLIP_TOP - DIAL_TOP) * width) / DIAL_SPAN;
         _dial = WatchUi.loadResource(Rez.Drawables.Dial) as BitmapResource;
+        if (_burnInProtection) {
+            _dialAod = WatchUi.loadResource(Rez.Drawables.DialAod) as BitmapResource;
+        }
         var stats = System.getSystemStats();
         System.println("screen " + width + ", burn-in protection " + _burnInProtection
             + ", memory after dial: " + stats.usedMemory + " / " + stats.totalMemory);
     }
 
     function onUpdate(dc as Dc) as Void {
-        var info = Gregorian.info(Time.now(), Time.FORMAT_SHORT);
+        var now = Time.now();
+        var info = Gregorian.info(now, Time.FORMAT_SHORT);
         var hour = info.hour as Number;
         var min = info.min as Number;
         var sec = info.sec as Number;
+        var year = info.year as Number;
+        var month = info.month as Number;
+        var day = info.day as Number;
+        var dayOfWeek = info.day_of_week as Number;
         var hourAngle = ((hour % 12) + min / 60.0 + sec / 3600.0) * 30.0;
         var minuteAngle = (min + sec / 60.0) * 6.0;
+        var dayAngle = Calendar.dayHandAngle(dayOfWeek);
+        var weekAngle = Calendar.weekHandAngle(year, month, day, dayOfWeek);
 
         if (dc has :setAntiAlias) {
             dc.setAntiAlias(true);
@@ -70,18 +99,24 @@ class Face5212View extends WatchUi.WatchFace {
         }
 
         if (lowPower && _burnInProtection) {
-            // Always-on view: black screen, hour and minute hands only. Well under the
-            // 10% luminance budget; shifted a pixel each minute so no pixel stays lit.
+            // Always-on view: the dial inverted to grey on black, the date window and
+            // the pointers and hands on top, no seconds. Nothing moves between minutes:
+            // these screens are judged on luminance, not on how long a pixel stays lit,
+            // and a shifting frame cut the dial's edge. The dial brightness is set in
+            // tools/export-assets.mjs to stay under Garmin's 10% luminance budget.
+            if (day != _dateAodDay) {
+                _dateAod = null;
+                _dateAod = WatchUi.loadResource(Generated.dateAodBitmapId(day)) as BitmapResource;
+                _dateAodDay = day;
+            }
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
             dc.clear();
-            Hands.drawSleep(dc, hourAngle, minuteAngle, (min % 3) - 1, ((min / 3) % 3) - 1);
+            dc.drawBitmap(0, 0, _dialAod as BitmapResource);
+            dc.drawBitmap(_dateX, _dateY, _dateAod as BitmapResource);
+            Hands.drawAod(dc, dayAngle, weekAngle, hourAngle, minuteAngle);
             return;
         }
 
-        var year = info.year as Number;
-        var month = info.month as Number;
-        var day = info.day as Number;
-        var dayOfWeek = info.day_of_week as Number;
         if (day != _dateDay) {
             _date = null;
             _date = WatchUi.loadResource(Generated.dateBitmapId(day)) as BitmapResource;
@@ -92,25 +127,81 @@ class Face5212View extends WatchUi.WatchFace {
         dc.drawBitmap(_dateX, _dateY, _date as BitmapResource);
 
         // Stacking order matches the web app: day, week, hour, minute, seconds.
-        Hands.drawDay(dc, Calendar.dayHandAngle(dayOfWeek));
-        Hands.drawWeek(dc, Calendar.weekHandAngle(year, month, day, dayOfWeek));
+        Hands.drawDay(dc, dayAngle);
+        Hands.drawWeek(dc, weekAngle);
         Hands.drawHour(dc, hourAngle);
         Hands.drawMinute(dc, minuteAngle);
         if (lowPower) {
             // Low-power mode redraws once a minute, so the seconds hand would be wrong.
             Hands.drawHub(dc);
+        } else if (beatSupported()) {
+            Hands.drawSeconds(dc, secondsAngle(sec, now));
         } else {
             Hands.drawSeconds(dc, sec * 6.0);
         }
     }
 
+    // The beating seconds hand runs only where it was built and tested: AMOLED
+    // watches that report their display mode (API 5+). Those also let us check
+    // for high power before starting the timer, which older devices cannot.
+    private function beatSupported() as Boolean {
+        return _burnInProtection && (System has :getDisplayMode);
+    }
+
+    // Seconds-hand angle in eighths of a second. The clock gives whole seconds;
+    // the millisecond timer, anchored to the clock boundary by _phaseMs, gives
+    // how far into the second we are.
+    private function secondsAngle(sec as Number, now as Time.Moment) as Float {
+        var d = System.getTimer().toLong() - now.value().toLong() * 1000l;
+        if (d < _phaseMs) {
+            _phaseMs = d;
+        }
+        var beats = ((d - _phaseMs) / BEAT_MS).toNumber();
+        if (beats > BEATS_PER_SECOND - 1) {
+            beats = BEATS_PER_SECOND - 1;
+        }
+        return (sec + beats / (BEATS_PER_SECOND * 1.0)) * 6.0;
+    }
+
+    function onBeat() as Void {
+        WatchUi.requestUpdate();
+    }
+
+    private function startBeat() as Void {
+        if (_beat != null || !_awake || !beatSupported()) {
+            return;
+        }
+        if (System.getDisplayMode() != System.DISPLAY_MODE_HIGH_POWER) {
+            return;
+        }
+        _beat = new Timer.Timer();
+        (_beat as Timer.Timer).start(method(:onBeat), BEAT_MS, true);
+    }
+
+    private function stopBeat() as Void {
+        if (_beat != null) {
+            (_beat as Timer.Timer).stop();
+            _beat = null;
+        }
+    }
+
+    function onShow() as Void {
+        startBeat();
+    }
+
+    function onHide() as Void {
+        stopBeat();
+    }
+
     function onExitSleep() as Void {
         _awake = true;
+        startBeat();
         WatchUi.requestUpdate();
     }
 
     function onEnterSleep() as Void {
         _awake = false;
+        stopBeat();
         WatchUi.requestUpdate();
     }
 

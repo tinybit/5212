@@ -32,4 +32,36 @@
     <bitmap id="Date29" filename="date-29.png" dithering="none" />
     <bitmap id="Date30" filename="date-30.png" dithering="none" />
     <bitmap id="Date31" filename="date-31.png" dithering="none" />
+    <bitmap id="DialAod" filename="dial-aod.png" dithering="none" />
+    <bitmap id="DateAod1" filename="date-aod-01.png" dithering="none" />
+    <bitmap id="DateAod2" filename="date-aod-02.png" dithering="none" />
+    <bitmap id="DateAod3" filename="date-aod-03.png" dithering="none" />
+    <bitmap id="DateAod4" filename="date-aod-04.png" dithering="none" />
+    <bitmap id="DateAod5" filename="date-aod-05.png" dithering="none" />
+    <bitmap id="DateAod6" filename="date-aod-06.png" dithering="none" />
+    <bitmap id="DateAod7" filename="date-aod-07.png" dithering="none" />
+    <bitmap id="DateAod8" filename="date-aod-08.png" dithering="none" />
+    <bitmap id="DateAod9" filename="date-aod-09.png" dithering="none" />
+    <bitmap id="DateAod10" filename="date-aod-10.png" dithering="none" />
+    <bitmap id="DateAod11" filename="date-aod-11.png" dithering="none" />
+    <bitmap id="DateAod12" filename="date-aod-12.png" dithering="none" />
+    <bitmap id="DateAod13" filename="date-aod-13.png" dithering="none" />
+    <bitmap id="DateAod14" filename="date-aod-14.png" dithering="none" />
+    <bitmap id="DateAod15" filename="date-aod-15.png" dithering="none" />
+    <bitmap id="DateAod16" filename="date-aod-16.png" dithering="none" />
+    <bitmap id="DateAod17" filename="date-aod-17.png" dithering="none" />
+    <bitmap id="DateAod18" filename="date-aod-18.png" dithering="none" />
+    <bitmap id="DateAod19" filename="date-aod-19.png" dithering="none" />
+    <bitmap id="DateAod20" filename="date-aod-20.png" dithering="none" />
+    <bitmap id="DateAod21" filename="date-aod-21.png" dithering="none" />
+    <bitmap id="DateAod22" filename="date-aod-22.png" dithering="none" />
+    <bitmap id="DateAod23" filename="date-aod-23.png" dithering="none" />
+    <bitmap id="DateAod24" filename="date-aod-24.png" dithering="none" />
+    <bitmap id="DateAod25" filename="date-aod-25.png" dithering="none" />
+    <bitmap id="DateAod26" filename="date-aod-26.png" dithering="none" />
+    <bitmap id="DateAod27" filename="date-aod-27.png" dithering="none" />
+    <bitmap id="DateAod28" filename="date-aod-28.png" dithering="none" />
+    <bitmap id="DateAod29" filename="date-aod-29.png" dithering="none" />
+    <bitmap id="DateAod30" filename="date-aod-30.png" dithering="none" />
+    <bitmap id="DateAod31" filename="date-aod-31.png" dithering="none" />
 </drawables>

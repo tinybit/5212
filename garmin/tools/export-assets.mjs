@@ -81,12 +81,19 @@ const devices = deviceIds.map((id) => {
 
 const sizes = [...new Set(devices.map((d) => d.size))].sort((a, b) => a - b);
 const iconSizes = [...new Set(devices.map((d) => d.icon))].sort((a, b) => a - b);
+// Always-on dial brightness (AMOLED): the inverted dial's white level, 153/255 = 60%.
+// Garmin blanks an always-on face that uses more than 10% of the screen's luminance;
+// the simulator's burn-in test measures the whole always-on frame at about 9.8%.
+const AOD_WHITE = 153;
+
 const targets = sizes.map((size) => ({
   size,
   family: `round-${size}x${size}`,
   // MIP screens get a 4-grey dial (00/55/AA/FF). The dial has no colour of its own,
   // and pre-quantising keeps blended edge pixels from landing on tinted palette entries.
   grey4: devices.some((d) => d.size === size && d.display === "mip"),
+  // AMOLED screens also get the always-on dial: the same dial inverted to grey on black.
+  aod: !devices.some((d) => d.size === size && d.display === "mip"),
   drawablesDir: path.join(garminDir, `resources-round-${size}x${size}`, "drawables"),
   previewDir: path.join(previewDir, `round-${size}x${size}`),
   crop: dateCrop(size),
@@ -143,11 +150,12 @@ async function renderDial(day) {
   return png;
 }
 
-// Canvas work page: downscale, optionally reduce to 4 greys, and crop the date window.
+// Canvas work page: downscale, optionally reduce to 4 greys, crop the date window,
+// and (aodWhite > 0) build the inverted always-on dial and its date crop.
 const work = await browser.newPage();
-async function processDial(png, size, crop, grey4) {
+async function processDial(png, size, crop, grey4, aodWhite) {
   return work.evaluate(
-    async ({ dataUrl, size, crop, grey4 }) => {
+    async ({ dataUrl, size, crop, grey4, aodWhite }) => {
       const img = new Image();
       img.src = dataUrl;
       await img.decode();
@@ -185,22 +193,65 @@ async function processDial(png, size, crop, grey4) {
         octx.putImageData(im, 0, 0);
       }
 
-      const dateCanvas = document.createElement("canvas");
-      dateCanvas.width = crop.w;
-      dateCanvas.height = crop.h;
-      dateCanvas
-        .getContext("2d")
-        .drawImage(out, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+      const cropOf = (canvas) => {
+        const c = document.createElement("canvas");
+        c.width = crop.w;
+        c.height = crop.h;
+        c.getContext("2d").drawImage(canvas, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+        return c.toDataURL("image/png");
+      };
+      const result = { full: out.toDataURL("image/png"), date: cropOf(out) };
 
-      return { full: out.toDataURL("image/png"), date: dateCanvas.toDataURL("image/png") };
+      if (aodWhite > 0) {
+        // Inverted dial: cream background -> black, black print -> aodWhite grey.
+        // The background level is the 90th-percentile luminance, so cream maps to
+        // exactly black and adds no luminance.
+        const im = octx.getImageData(0, 0, size, size);
+        const d = im.data;
+        const n = size * size;
+        const lum = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          lum[i] = 0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2];
+        }
+        const bg = Float32Array.from(lum).sort()[Math.floor(n * 0.9)];
+        const aod = document.createElement("canvas");
+        aod.width = size;
+        aod.height = size;
+        const actx = aod.getContext("2d");
+        const aim = actx.createImageData(size, size);
+        for (let i = 0; i < n; i++) {
+          const v = Math.max(0, (bg - lum[i]) / bg) * aodWhite;
+          const q = Math.round(v);
+          aim.data[i * 4] = aim.data[i * 4 + 1] = aim.data[i * 4 + 2] = q;
+          aim.data[i * 4 + 3] = 255;
+        }
+        actx.putImageData(aim, 0, 0);
+        result.aodFull = aod.toDataURL("image/png");
+        result.aodDate = cropOf(aod);
+      }
+      return result;
     },
     {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`,
       size,
       crop,
       grey4,
+      aodWhite,
     },
   );
+}
+
+// A 1x1 black PNG: the always-on resource ids must exist on MIP devices too, where they are never drawn.
+async function blackPixel() {
+  return work.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 1;
+    c.height = 1;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, 1, 1);
+    return c.toDataURL("image/png");
+  });
 }
 
 const writeDataUrl = (file, dataUrl) =>
@@ -209,7 +260,10 @@ const writeDataUrl = (file, dataUrl) =>
 // MIP dials are already reduced to the palette's greys, so the resource compiler must not dither them.
 const DITHERING = "none";
 const dateIds = Array.from({ length: 31 }, (_, i) => `Date${i + 1}`);
+const dateAodIds = Array.from({ length: 31 }, (_, i) => `DateAod${i + 1}`);
 const dateFile = (i) => `date-${String(i + 1).padStart(2, "0")}.png`;
+const dateAodFile = (i) => `date-aod-${String(i + 1).padStart(2, "0")}.png`;
+const AOD_PLACEHOLDER = "aod-placeholder.png";
 
 for (const t of targets) {
   fs.rmSync(path.dirname(t.drawablesDir), { recursive: true, force: true });
@@ -217,17 +271,25 @@ for (const t of targets) {
   fs.mkdirSync(t.previewDir, { recursive: true });
 }
 
+const placeholder = await blackPixel();
 for (let day = 1; day <= 31; day++) {
   const png = await renderDial(day);
   const first = day === 1;
   if (first) fs.writeFileSync(path.join(previewDir, "dial-hires.png"), png);
   for (const t of targets) {
-    const res = await processDial(png, t.size, t.crop, t.grey4);
+    const res = await processDial(png, t.size, t.crop, t.grey4, t.aod ? AOD_WHITE : 0);
     if (first) {
       writeDataUrl(path.join(t.drawablesDir, "dial.png"), res.full);
       writeDataUrl(path.join(t.previewDir, "dial.png"), res.full);
+      if (t.aod) {
+        writeDataUrl(path.join(t.drawablesDir, "dial-aod.png"), res.aodFull);
+        writeDataUrl(path.join(t.previewDir, "dial-aod.png"), res.aodFull);
+      } else {
+        writeDataUrl(path.join(t.drawablesDir, AOD_PLACEHOLDER), placeholder);
+      }
     }
     writeDataUrl(path.join(t.drawablesDir, dateFile(day - 1)), res.date);
+    if (t.aod) writeDataUrl(path.join(t.drawablesDir, dateAodFile(day - 1)), res.aodDate);
   }
   process.stdout.write(`day ${day} `);
 }
@@ -249,6 +311,12 @@ for (const t of targets) {
       `    <bitmap id="Dial" filename="dial.png" dithering="${DITHERING}" />`,
       ...dateIds.map(
         (id, i) => `    <bitmap id="${id}" filename="${dateFile(i)}" dithering="${DITHERING}" />`,
+      ),
+      // Always-on dial and date crops (AMOLED); a 1x1 placeholder elsewhere.
+      `    <bitmap id="DialAod" filename="${t.aod ? "dial-aod.png" : AOD_PLACEHOLDER}" dithering="none" />`,
+      ...dateAodIds.map(
+        (id, i) =>
+          `    <bitmap id="${id}" filename="${t.aod ? dateAodFile(i) : AOD_PLACEHOLDER}" dithering="none" />`,
       ),
       "</drawables>",
       "",
@@ -317,6 +385,14 @@ fs.writeFileSync(
     "    function dateBitmapId(day as Number) as ResourceId {",
     "        var ids = [",
     ...dateIds.map((id) => `            Rez.Drawables.${id},`),
+    "        ] as Array<ResourceId>;",
+    "        return ids[day - 1];",
+    "    }",
+    "",
+    "    // Same for the inverted always-on date window (AMOLED devices).",
+    "    function dateAodBitmapId(day as Number) as ResourceId {",
+    "        var ids = [",
+    ...dateAodIds.map((id) => `            Rez.Drawables.${id},`),
     "        ] as Array<ResourceId>;",
     "        return ids[day - 1];",
     "    }",

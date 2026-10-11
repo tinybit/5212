@@ -69,7 +69,6 @@ module Hands {
     var seconds = 0x000000;
     var hub = 0x000000;
     var pin = 0x555555;
-    var sleepHands = 0x555555;
 
     function setup(width as Number, fullColour as Boolean) as Void {
         cx = width / 2.0;
@@ -86,7 +85,6 @@ module Hands {
             seconds = 0x1A1A19;
             hub = 0x1A1A19;
             pin = 0x777874;
-            sleepHands = 0x5A5A58;
         }
     }
 
@@ -116,60 +114,72 @@ module Hands {
     }
 
     function drawHour(dc as Dc, angleDeg as Float) as Void {
+        drawHourFaceted(dc, angleDeg, facetLit, facetDark);
+    }
+
+    function drawMinute(dc as Dc, angleDeg as Float) as Void {
+        drawMinuteFaceted(dc, angleDeg, facetLit, facetDark);
+    }
+
+    // Two-facet hour hand: the facet facing the light gets `lit`, the other `dark`.
+    // The whole silhouette is filled dark first and the lit facet drawn over it, so the
+    // anti-aliased ridge between the facets blends lit over dark; two shapes meeting
+    // edge to edge would each fade out there and let the dial show through as a hairline.
+    function drawHourFaceted(dc as Dc, angleDeg as Float, lit as Number, dark as Number) as Void {
         var a = Math.toRadians(angleDeg);
         var sn = Math.sin(a);
         var cs = Math.cos(a);
         var rear = pt(sn, cs, HOUR_REAR, 0.0);
         var tip = pt(sn, cs, HOUR_TIP, 0.0);
-        var lit = positiveSideLit(sn, cs);
-        fill(dc, lit ? facetLit : facetDark,
-            [rear, pt(sn, cs, HOUR_BASE, HOUR_HALF_WIDTH), pt(sn, cs, HOUR_TIP, HOUR_TIP_HALF_WIDTH), tip]);
-        fill(dc, lit ? facetDark : facetLit,
-            [rear, tip, pt(sn, cs, HOUR_TIP, -HOUR_TIP_HALF_WIDTH), pt(sn, cs, HOUR_BASE, -HOUR_HALF_WIDTH)]);
+        var basePos = pt(sn, cs, HOUR_BASE, HOUR_HALF_WIDTH);
+        var baseNeg = pt(sn, cs, HOUR_BASE, -HOUR_HALF_WIDTH);
+        var tipPos = pt(sn, cs, HOUR_TIP, HOUR_TIP_HALF_WIDTH);
+        var tipNeg = pt(sn, cs, HOUR_TIP, -HOUR_TIP_HALF_WIDTH);
+        fill(dc, dark, [rear, basePos, tipPos, tipNeg, baseNeg]);
+        if (positiveSideLit(sn, cs)) {
+            fill(dc, lit, [rear, basePos, tipPos, tip]);
+        } else {
+            fill(dc, lit, [rear, tip, tipNeg, baseNeg]);
+        }
     }
 
-    function drawMinute(dc as Dc, angleDeg as Float) as Void {
+    function drawMinuteFaceted(dc as Dc, angleDeg as Float, lit as Number, dark as Number) as Void {
         var a = Math.toRadians(angleDeg);
         var sn = Math.sin(a);
         var cs = Math.cos(a);
         var rear = pt(sn, cs, MINUTE_REAR, 0.0);
         var tip = pt(sn, cs, MINUTE_TIP, 0.0);
-        var lit = positiveSideLit(sn, cs);
-        fill(dc, lit ? facetLit : facetDark, [rear, tip, pt(sn, cs, MINUTE_BASE, MINUTE_HALF_WIDTH)]);
-        fill(dc, lit ? facetDark : facetLit, [rear, pt(sn, cs, MINUTE_BASE, -MINUTE_HALF_WIDTH), tip]);
+        var basePos = pt(sn, cs, MINUTE_BASE, MINUTE_HALF_WIDTH);
+        var baseNeg = pt(sn, cs, MINUTE_BASE, -MINUTE_HALF_WIDTH);
+        fill(dc, dark, [rear, basePos, tip, baseNeg]);
+        if (positiveSideLit(sn, cs)) {
+            fill(dc, lit, [rear, tip, basePos]);
+        } else {
+            fill(dc, lit, [rear, baseNeg, tip]);
+        }
     }
 
-    // Always-on view for screens with burn-in protection: hour and minute
-    // hands as single dim shapes on black, so few pixels stay lit. shiftX/shiftY
-    // move the whole drawing by a pixel or two so the same pixels are not lit
-    // minute after minute.
-    function drawSleep(dc as Dc, hourAngleDeg as Float, minuteAngleDeg as Float,
-            shiftX as Number, shiftY as Number) as Void {
-        var cx0 = cx;
-        var cy0 = cy;
-        cx += shiftX;
-        cy += shiftY;
-        drawSleepHands(dc, hourAngleDeg, minuteAngleDeg);
-        cx = cx0;
-        cy = cy0;
-    }
+    // Always-on view on AMOLED: the inverted dial bitmap is drawn by the view; this adds
+    // dim day/week pointers with muted red heads, the two-facet hour and minute hands
+    // (lit facet light grey, shadow facet mid grey so it still reads on black), and the
+    // axle pin. No seconds hand: the view redraws once a minute.
+    const AOD_HAND_LIT = 0xB4B4B4;
+    const AOD_HAND_DARK = 0x505050;
+    const AOD_SHAFT = 0x8C8C8C;
+    const AOD_RED = 0x8C1A1A;
+    const AOD_PIN = 0x262626;
 
-    function drawSleepHands(dc as Dc, hourAngleDeg as Float, minuteAngleDeg as Float) as Void {
-        var a = Math.toRadians(hourAngleDeg);
-        var sn = Math.sin(a);
-        var cs = Math.cos(a);
-        fill(dc, sleepHands, [
-            pt(sn, cs, HOUR_REAR, 0.0), pt(sn, cs, HOUR_BASE, HOUR_HALF_WIDTH),
-            pt(sn, cs, HOUR_TIP, HOUR_TIP_HALF_WIDTH), pt(sn, cs, HOUR_TIP, -HOUR_TIP_HALF_WIDTH),
-            pt(sn, cs, HOUR_BASE, -HOUR_HALF_WIDTH),
-        ]);
-        a = Math.toRadians(minuteAngleDeg);
-        sn = Math.sin(a);
-        cs = Math.cos(a);
-        fill(dc, sleepHands, [
-            pt(sn, cs, MINUTE_REAR, 0.0), pt(sn, cs, MINUTE_BASE, MINUTE_HALF_WIDTH),
-            pt(sn, cs, MINUTE_TIP, 0.0), pt(sn, cs, MINUTE_BASE, -MINUTE_HALF_WIDTH),
-        ]);
+    function drawAod(dc as Dc, dayAngleDeg as Float, weekAngleDeg as Float, hourAngleDeg as Float,
+            minuteAngleDeg as Float) as Void {
+        drawIndicator(dc, dayAngleDeg, AOD_SHAFT, AOD_RED, DAY_SHAFT_START, DAY_HEAD_RADIUS,
+            DAY_SHAFT_HALF_WIDTH, DAY_HEAD_HALF_LENGTH, DAY_HEAD_HALF_THICKNESS);
+        drawIndicator(dc, weekAngleDeg, AOD_SHAFT, AOD_RED, WEEK_SHAFT_START, WEEK_HEAD_RADIUS,
+            WEEK_SHAFT_HALF_WIDTH, WEEK_HEAD_HALF_LENGTH, WEEK_HEAD_HALF_THICKNESS);
+        drawHourFaceted(dc, hourAngleDeg, AOD_HAND_LIT, AOD_HAND_DARK);
+        drawMinuteFaceted(dc, minuteAngleDeg, AOD_HAND_LIT, AOD_HAND_DARK);
+        // No seconds hand here, so only a small cap: 45% of the seconds-hand cap, with the pin.
+        fill(dc, AOD_SHAFT, circle(HUB_RADIUS * 0.45, 20));
+        fill(dc, AOD_PIN, circle(PIN_RADIUS * 0.9, 12));
     }
 
     function drawSeconds(dc as Dc, angleDeg as Float) as Void {

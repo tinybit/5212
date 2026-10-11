@@ -32,4 +32,36 @@
     <bitmap id="Date29" filename="date-29.png" dithering="none" />
     <bitmap id="Date30" filename="date-30.png" dithering="none" />
     <bitmap id="Date31" filename="date-31.png" dithering="none" />
+    <bitmap id="DialAod" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod1" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod2" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod3" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod4" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod5" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod6" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod7" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod8" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod9" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod10" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod11" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod12" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod13" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod14" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod15" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod16" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod17" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod18" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod19" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod20" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod21" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod22" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod23" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod24" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod25" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod26" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod27" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod28" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod29" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod30" filename="aod-placeholder.png" dithering="none" />
+    <bitmap id="DateAod31" filename="aod-placeholder.png" dithering="none" />
 </drawables>

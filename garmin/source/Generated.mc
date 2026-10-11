@@ -39,4 +39,42 @@ module Generated {
         ] as Array<ResourceId>;
         return ids[day - 1];
     }
+
+    // Same for the inverted always-on date window (AMOLED devices).
+    function dateAodBitmapId(day as Number) as ResourceId {
+        var ids = [
+            Rez.Drawables.DateAod1,
+            Rez.Drawables.DateAod2,
+            Rez.Drawables.DateAod3,
+            Rez.Drawables.DateAod4,
+            Rez.Drawables.DateAod5,
+            Rez.Drawables.DateAod6,
+            Rez.Drawables.DateAod7,
+            Rez.Drawables.DateAod8,
+            Rez.Drawables.DateAod9,
+            Rez.Drawables.DateAod10,
+            Rez.Drawables.DateAod11,
+            Rez.Drawables.DateAod12,
+            Rez.Drawables.DateAod13,
+            Rez.Drawables.DateAod14,
+            Rez.Drawables.DateAod15,
+            Rez.Drawables.DateAod16,
+            Rez.Drawables.DateAod17,
+            Rez.Drawables.DateAod18,
+            Rez.Drawables.DateAod19,
+            Rez.Drawables.DateAod20,
+            Rez.Drawables.DateAod21,
+            Rez.Drawables.DateAod22,
+            Rez.Drawables.DateAod23,
+            Rez.Drawables.DateAod24,
+            Rez.Drawables.DateAod25,
+            Rez.Drawables.DateAod26,
+            Rez.Drawables.DateAod27,
+            Rez.Drawables.DateAod28,
+            Rez.Drawables.DateAod29,
+            Rez.Drawables.DateAod30,
+            Rez.Drawables.DateAod31,
+        ] as Array<ResourceId>;
+        return ids[day - 1];
+    }
 }
