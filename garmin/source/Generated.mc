@@ -94,4 +94,22 @@ module Generated {
     function handBitmapScale() as Number {
         return 2;
     }
+
+    // Shadow bitmaps, in the order day, week, hour, minute, seconds: pin position inside each
+    // bitmap as [x0, y0, x1, y1, ...], and the screen offset (px) each shadow is drawn at.
+    function shadowPivots(width as Number) as Array<Number>? {
+        if (width == 390) { return [19, 90, 18, 165, 22, 105, 21, 158, 18, 161] as Array<Number>; }
+        if (width == 416) { return [21, 96, 19, 175, 23, 111, 22, 168, 20, 172] as Array<Number>; }
+        if (width == 454) { return [23, 104, 20, 190, 25, 122, 24, 184, 21, 187] as Array<Number>; }
+        if (width == 466) { return [23, 107, 21, 195, 26, 125, 24, 188, 22, 192] as Array<Number>; }
+        return null;
+    }
+
+    function shadowOffsets(width as Number) as Array<Float>? {
+        if (width == 390) { return [1.170, 0.622, 2.340, 1.244, 3.510, 1.866, 4.681, 2.488, 5.851, 3.111] as Array<Float>; }
+        if (width == 416) { return [1.248, 0.664, 2.496, 1.327, 3.744, 1.991, 4.993, 2.654, 6.241, 3.318] as Array<Float>; }
+        if (width == 454) { return [1.362, 0.724, 2.724, 1.448, 4.086, 2.173, 5.449, 2.897, 6.811, 3.621] as Array<Float>; }
+        if (width == 466) { return [1.398, 0.743, 2.796, 1.487, 4.195, 2.230, 5.593, 2.973, 6.991, 3.717] as Array<Float>; }
+        return null;
+    }
 }

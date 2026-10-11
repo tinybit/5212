@@ -86,11 +86,24 @@ class Face5212View extends WatchUi.WatchFace {
                     WatchUi.loadResource(Rez.Drawables.HandSeconds) as BitmapResource,
                     pivots, Generated.handBitmapScale());
                 smooth = true;
+                // Hand shadows go with the image hands (awake view only: the always-on
+                // view draws its own hands without them).
+                var shadowPivots = Generated.shadowPivots(width);
+                var shadowOffsets = Generated.shadowOffsets(width);
+                if (shadowPivots != null && shadowOffsets != null) {
+                    Hands.setupShadows([
+                        WatchUi.loadResource(Rez.Drawables.ShadowDay) as BitmapResource,
+                        WatchUi.loadResource(Rez.Drawables.ShadowWeek) as BitmapResource,
+                        WatchUi.loadResource(Rez.Drawables.ShadowHour) as BitmapResource,
+                        WatchUi.loadResource(Rez.Drawables.ShadowMinute) as BitmapResource,
+                        WatchUi.loadResource(Rez.Drawables.ShadowSeconds) as BitmapResource,
+                    ] as Array<BitmapResource>, shadowPivots, shadowOffsets);
+                }
             }
         }
         var stats = System.getSystemStats();
         System.println("screen " + width + ", burn-in protection " + _burnInProtection
-            + ", bitmap hands " + smooth
+            + ", bitmap hands " + smooth + ", shadows " + Hands.shadows
             + ", memory after bitmaps: " + stats.usedMemory + " / " + stats.totalMemory);
     }
 

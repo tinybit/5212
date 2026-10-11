@@ -142,35 +142,79 @@ module Hands {
         smooth = true;
     }
 
-    // Draws the bitmap rotated by angleDeg about its pin, which lands on the dial centre.
-    // Returns false, and switches the module back to polygon hands for good, when the
-    // watch rejects the call (an unexpected bitmap format on some firmware, say): a
-    // plain hand beats a crashed face.
-    function drawBitmapHand(dc as Dc, bitmap as BitmapResource, px as Number, py as Number, angleDeg as Float,
-            mirror as Boolean) as Boolean {
+    // Hand shadows (image-hand watches): one blurred silhouette per hand, rendered by
+    // tools/export-assets.mjs at the screen scale, black with the shadow strength as alpha.
+    // Each is drawn just before its hand, rotated like the hand and shifted by a fixed
+    // offset away from the light, so higher hands throw their shadow farther and a high
+    // hand's shadow also falls across the hands below it.
+    const SHADOW_DAY = 0;
+    const SHADOW_WEEK = 1;
+    const SHADOW_HOUR = 2;
+    const SHADOW_MINUTE = 3;
+    const SHADOW_SECONDS = 4;
+    var shadows = false;
+    var shadowBitmaps as Array<BitmapResource> = [] as Array<BitmapResource>;
+    // [x0, y0, x1, y1, ...] pin positions in the shadow bitmaps, and the screen offsets.
+    var shadowPivots as Array<Number> = [] as Array<Number>;
+    var shadowOffsets as Array<Float> = [] as Array<Float>;
+
+    function setupShadows(bitmaps as Array<BitmapResource>, pivotList as Array<Number>,
+            offsets as Array<Float>) as Void {
+        shadowBitmaps = bitmaps;
+        shadowPivots = pivotList;
+        shadowOffsets = offsets;
+        shadows = true;
+    }
+
+    function drawShadow(dc as Dc, index as Number, angleDeg as Float) as Void {
+        if (!shadows) {
+            return;
+        }
+        if (!drawRotated(dc, shadowBitmaps[index], shadowPivots[2 * index], shadowPivots[2 * index + 1],
+                angleDeg, false, 1, shadowOffsets[2 * index], shadowOffsets[2 * index + 1])) {
+            shadows = false;
+        }
+    }
+
+    // Draws the bitmap rotated by angleDeg about its pin, which lands on the dial centre
+    // shifted by (ox, oy). Returns false when the watch rejects the call (an unexpected
+    // bitmap format on some firmware, say); the callers then fall back for good: a plain
+    // hand beats a crashed face.
+    function drawRotated(dc as Dc, bitmap as BitmapResource, px as Number, py as Number, angleDeg as Float,
+            mirror as Boolean, scale as Number, ox as Float, oy as Float) as Boolean {
         // Source pin -> (shrink, mirror, rotate) -> dial centre; the bitmap is drawn at the
         // origin and the transform places it.
         var t = new Graphics.AffineTransform();
-        t.translate(cx, cy);
+        t.translate(cx + ox, cy + oy);
         t.rotate(Math.toRadians(angleDeg).toFloat());
         if (mirror) {
             t.scale(-1.0, 1.0);
         }
-        if (bitmapScale != 1) {
-            t.scale(1.0 / bitmapScale, 1.0 / bitmapScale);
+        if (scale != 1) {
+            t.scale(1.0 / scale, 1.0 / scale);
         }
         t.translate(-px.toFloat(), -py.toFloat());
         try {
             dc.drawBitmap2(0, 0, bitmap, {:transform => t, :filterMode => Graphics.FILTER_MODE_BILINEAR});
         } catch (e) {
-            smooth = false;
-            System.println("bitmap hands disabled: " + e.getErrorMessage());
+            System.println("bitmap drawing disabled: " + e.getErrorMessage());
             return false;
         }
         return true;
     }
 
+    function drawBitmapHand(dc as Dc, bitmap as BitmapResource, px as Number, py as Number, angleDeg as Float,
+            mirror as Boolean) as Boolean {
+        if (drawRotated(dc, bitmap, px, py, angleDeg, mirror, bitmapScale, 0.0, 0.0)) {
+            return true;
+        }
+        smooth = false;
+        shadows = false;
+        return false;
+    }
+
     function drawHour(dc as Dc, angleDeg as Float) as Void {
+        drawShadow(dc, SHADOW_HOUR, angleDeg);
         if (smooth) {
             var a = Math.toRadians(angleDeg);
             if (drawBitmapHand(dc, hourBitmap as BitmapResource, pivots[0], pivots[1], angleDeg,
@@ -182,6 +226,7 @@ module Hands {
     }
 
     function drawMinute(dc as Dc, angleDeg as Float) as Void {
+        drawShadow(dc, SHADOW_MINUTE, angleDeg);
         if (smooth) {
             var a = Math.toRadians(angleDeg);
             if (drawBitmapHand(dc, minuteBitmap as BitmapResource, pivots[2], pivots[3], angleDeg,
@@ -254,6 +299,7 @@ module Hands {
     }
 
     function drawSeconds(dc as Dc, angleDeg as Float) as Void {
+        drawShadow(dc, SHADOW_SECONDS, angleDeg);
         if (smooth && drawBitmapHand(dc, secondsBitmap as BitmapResource, pivots[4], pivots[5], angleDeg, false)) {
             drawHub(dc);
             return;
@@ -284,11 +330,13 @@ module Hands {
     }
 
     function drawWeek(dc as Dc, angleDeg as Float) as Void {
+        drawShadow(dc, SHADOW_WEEK, angleDeg);
         drawIndicator(dc, angleDeg, weekShaft, weekRed, WEEK_SHAFT_START, WEEK_HEAD_RADIUS,
             WEEK_SHAFT_HALF_WIDTH, WEEK_HEAD_HALF_LENGTH, WEEK_HEAD_HALF_THICKNESS);
     }
 
     function drawDay(dc as Dc, angleDeg as Float) as Void {
+        drawShadow(dc, SHADOW_DAY, angleDeg);
         drawIndicator(dc, angleDeg, dayShaft, dayRed, DAY_SHAFT_START, DAY_HEAD_RADIUS,
             DAY_SHAFT_HALF_WIDTH, DAY_HEAD_HALF_LENGTH, DAY_HEAD_HALF_THICKNESS);
     }

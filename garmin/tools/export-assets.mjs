@@ -279,6 +279,156 @@ function handSpecs(size) {
 }
 
 // ---------------------------------------------------------------------------
+// Hand shadows (image-hand watches). Every hand casts a soft shadow onto the dial and onto
+// the hands below it, away from the light. The watch draws each hand's shadow just before
+// the hand, shifted by a fixed offset (it does not turn with the hand), so a high hand's
+// shadow also crosses the lower hands. Shadow bitmaps are the blurred hand silhouettes at
+// the screen scale (blur needs no extra resolution), black with the shadow strength as alpha.
+
+const SHADOW = {
+  // Height above the dial in mm, in the stacking order. Not published for the 26-330;
+  // watchmakers leave about one hand thickness of air between levels, so even steps.
+  heightMm: { day: 0.25, week: 0.5, hour: 0.75, minute: 1.0, seconds: 1.25 },
+  // How far a shadow falls per mm of height, in photo px. The dial is about 34 mm across
+  // (2060 photo px, so 60 px per mm): 28 px per mm stands for a soft light about 65° up,
+  // picked by eye from three variants (the user chose this one for its depth). The web
+  // dial's 41° point light would throw the shadows more than twice as far.
+  photoPxPerMm: 28,
+  // Penumbra (Gaussian sigma, photo px): a little blur at the dial, more for high hands.
+  blurBase: 3,
+  blurPerPx: 0.3,
+  // Darkness of the shadow core.
+  opacity: 0.35,
+};
+// Direction towards the light on the dial (x right, y down): the facet light of Hands.mc
+// (LIGHT_U, LIGHT_V), upper left. Shadows fall the opposite way.
+const LIGHT = { u: -0.6664, v: -0.3543 };
+// The day and week pointers and the seconds-hand cap, as in Hands.mc.
+const POINTER = {
+  day: {
+    shaftStart: 25,
+    headRadius: 432,
+    shaftHalfWidth: 7.5,
+    headHalfLength: 72,
+    headHalfThickness: 11.7,
+  },
+  week: {
+    shaftStart: 25,
+    headRadius: 818,
+    shaftHalfWidth: 6.48,
+    headHalfLength: 57,
+    headHalfThickness: 11.7,
+  },
+};
+const HUB_RADIUS = 41.36;
+const SHADOW_ORDER = ["day", "week", "hour", "minute", "seconds"];
+
+// Silhouette, bitmap size, pivot and draw offset of each shadow at one screen size.
+function shadowSpecs(size) {
+  const s = size / (2 * R_DIAL_EDGE);
+  const hw = (w) => Math.max(w, 0.75 / s);
+  const lightLen = Math.hypot(LIGHT.u, LIGHT.v);
+  const away = { x: -LIGHT.u / lightLen, y: -LIGHT.v / lightLen };
+  const make = (name, maxAlong, minAlong, maxHalfWidth, polys) => {
+    const fall = SHADOW.heightMm[name] * SHADOW.photoPxPerMm; // photo px
+    const blur = (SHADOW.blurBase + SHADOW.blurPerPx * fall) * s; // screen px
+    const margin = Math.ceil(3 * blur) + 2;
+    const width = 2 * Math.ceil(maxHalfWidth * s + margin);
+    const px = width / 2;
+    const py = margin + Math.ceil(maxAlong * s);
+    const height = py + Math.ceil(-Math.min(0, minAlong) * s) + margin;
+    const map = ([along, lateral]) => [px + lateral * s, py - along * s];
+    return {
+      name,
+      width,
+      height,
+      px,
+      py,
+      blur,
+      opacity: SHADOW.opacity,
+      dx: +(away.x * fall * s).toFixed(3),
+      dy: +(away.y * fall * s).toFixed(3),
+      polys: polys.map((points) => ({ color: "#000000", points: points.map(map) })),
+    };
+  };
+  const pointer = (name) => {
+    const p = POINTER[name];
+    const w = hw(p.shaftHalfWidth);
+    const halfAngle = p.headHalfLength / p.headRadius;
+    const outer = p.headRadius + p.headHalfThickness;
+    const inner = p.headRadius - p.headHalfThickness;
+    const arc = [];
+    for (let i = 0; i <= 16; i++) {
+      const a = -halfAngle + (2 * halfAngle * i) / 16;
+      arc.push([outer * Math.cos(a), outer * Math.sin(a)]);
+    }
+    for (let i = 16; i >= 0; i--) {
+      const a = -halfAngle + (2 * halfAngle * i) / 16;
+      arc.push([inner * Math.cos(a), inner * Math.sin(a)]);
+    }
+    const shaft = [
+      [p.shaftStart, -w],
+      [p.headRadius, -w],
+      [p.headRadius, w],
+      [p.shaftStart, w],
+    ];
+    return make(name, outer, 0, outer * Math.sin(halfAngle), [shaft, arc]);
+  };
+  const circle = (r) =>
+    Array.from({ length: 32 }, (_, i) => {
+      const a = (2 * Math.PI * i) / 32;
+      return [r * Math.cos(a), r * Math.sin(a)];
+    });
+  const h = HAND.hour;
+  const m = HAND.minute;
+  const q = HAND.seconds;
+  return [
+    pointer("day"),
+    pointer("week"),
+    make("hour", h.tip, h.rear, h.halfWidth, [
+      [
+        [h.rear, 0],
+        [h.base, h.halfWidth],
+        [h.tip, h.tipHalfWidth],
+        [h.tip, -h.tipHalfWidth],
+        [h.base, -h.halfWidth],
+      ],
+    ]),
+    make("minute", m.tip, m.rear, m.halfWidth, [
+      [
+        [m.rear, 0],
+        [m.base, m.halfWidth],
+        [m.tip, 0],
+        [m.base, -m.halfWidth],
+      ],
+    ]),
+    // The seconds hand carries the cap, so its shadow includes the cap.
+    make(
+      "seconds",
+      q.tip,
+      q.tailPoint,
+      Math.max(q.tailEndHalfWidth, HUB_RADIUS, hw(q.neckHalfWidth)),
+      [
+        [
+          [q.tip, -hw(q.tipHalfWidth)],
+          [q.tip, hw(q.tipHalfWidth)],
+          [q.neck, hw(q.neckHalfWidth)],
+          [q.neck, -hw(q.neckHalfWidth)],
+        ],
+        [
+          [q.shoulder, -q.shoulderHalfWidth],
+          [q.shoulder, q.shoulderHalfWidth],
+          [q.tailEnd, q.tailEndHalfWidth],
+          [q.tailPoint, 0],
+          [q.tailEnd, -q.tailEndHalfWidth],
+        ],
+        circle(HUB_RADIUS),
+      ],
+    ),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Rendering.
 
 const HIDE_HANDS_CSS = `
@@ -456,6 +606,46 @@ async function renderHand(spec) {
   );
 }
 
+// One shadow bitmap: the silhouette filled black at HAND_SUPERSAMPLE times the screen
+// scale, blurred, faded to the shadow strength, then halved down to the screen scale.
+async function renderShadow(spec) {
+  return work.evaluate(
+    ({ spec, factor }) => {
+      const sil = document.createElement("canvas");
+      sil.width = spec.width * factor;
+      sil.height = spec.height * factor;
+      const sctx = sil.getContext("2d");
+      sctx.fillStyle = "#000000";
+      for (const poly of spec.polys) {
+        sctx.beginPath();
+        poly.points.forEach(([x, y], i) =>
+          i === 0 ? sctx.moveTo(x * factor, y * factor) : sctx.lineTo(x * factor, y * factor),
+        );
+        sctx.closePath();
+        sctx.fill();
+      }
+      let c = document.createElement("canvas");
+      c.width = sil.width;
+      c.height = sil.height;
+      const ctx = c.getContext("2d");
+      ctx.filter = `blur(${spec.blur * factor}px)`;
+      ctx.globalAlpha = spec.opacity;
+      ctx.drawImage(sil, 0, 0);
+      while (c.width > spec.width) {
+        const half = document.createElement("canvas");
+        half.width = c.width / 2;
+        half.height = c.height / 2;
+        const hctx = half.getContext("2d");
+        hctx.imageSmoothingQuality = "high";
+        hctx.drawImage(c, 0, 0, half.width, half.height);
+        c = half;
+      }
+      return c.toDataURL("image/png");
+    },
+    { spec, factor: HAND_SUPERSAMPLE },
+  );
+}
+
 const writeDataUrl = (file, dataUrl) =>
   fs.writeFileSync(file, Buffer.from(dataUrl.split(",")[1], "base64"));
 
@@ -501,10 +691,19 @@ process.stdout.write("\n");
 // folder for every other watch. Pivots go into Generated.mc.
 const handIds = { hour: "HandHour", minute: "HandMinute", seconds: "HandSeconds" };
 const handFile = (name) => `hand-${name}.png`;
+const shadowIds = {
+  day: "ShadowDay",
+  week: "ShadowWeek",
+  hour: "ShadowHour",
+  minute: "ShadowMinute",
+  seconds: "ShadowSeconds",
+};
+const shadowFile = (name) => `shadow-${name}.png`;
 const HAND_PLACEHOLDER = "hand-placeholder.png";
 const handsDir = (size) => path.join(garminDir, `resources-hands-${size}`, "drawables");
 const noneDir = path.join(garminDir, HANDS_NONE, "drawables");
 const handsBySize = new Map();
+const shadowsBySize = new Map();
 for (const size of handSizes) {
   fs.rmSync(path.dirname(handsDir(size)), { recursive: true, force: true });
   fs.mkdirSync(handsDir(size), { recursive: true });
@@ -515,6 +714,13 @@ for (const size of handSizes) {
     const png = await renderHand(spec);
     writeDataUrl(path.join(handsDir(size), handFile(spec.name)), png);
     writeDataUrl(path.join(preview, handFile(spec.name)), png);
+  }
+  const shadows = shadowSpecs(size);
+  shadowsBySize.set(size, shadows);
+  for (const spec of shadows) {
+    const png = await renderShadow(spec);
+    writeDataUrl(path.join(handsDir(size), shadowFile(spec.name)), png);
+    writeDataUrl(path.join(preview, shadowFile(spec.name)), png);
   }
 }
 fs.rmSync(path.dirname(noneDir), { recursive: true, force: true });
@@ -564,18 +770,22 @@ const handsXml = (lines) =>
 for (const size of handSizes) {
   fs.writeFileSync(
     path.join(handsDir(size), "hands.xml"),
-    handsXml(
-      Object.entries(handIds).map(
+    handsXml([
+      ...Object.entries(handIds).map(
         ([name, id]) =>
           `    <bitmap id="${id}" filename="${handFile(name)}" dithering="none" packingFormat="png" automaticPalette="false" />`,
       ),
-    ),
+      ...Object.entries(shadowIds).map(
+        ([name, id]) =>
+          `    <bitmap id="${id}" filename="${shadowFile(name)}" dithering="none" packingFormat="png" automaticPalette="false" />`,
+      ),
+    ]),
   );
 }
 fs.writeFileSync(
   path.join(noneDir, "hands.xml"),
   handsXml(
-    Object.values(handIds).map(
+    [...Object.values(handIds), ...Object.values(shadowIds)].map(
       (id) => `    <bitmap id="${id}" filename="${HAND_PLACEHOLDER}" dithering="none" />`,
     ),
   ),
@@ -673,6 +883,24 @@ fs.writeFileSync(
     "    // Bitmap pixels per screen pixel in the hand bitmaps (the watch shrinks them by this).",
     "    function handBitmapScale() as Number {",
     `        return ${HAND_SCALE};`,
+    "    }",
+    "",
+    `    // Shadow bitmaps, in the order ${SHADOW_ORDER.join(", ")}: pin position inside each`,
+    "    // bitmap as [x0, y0, x1, y1, ...], and the screen offset (px) each shadow is drawn at.",
+    "    function shadowPivots(width as Number) as Array<Number>? {",
+    ...[...shadowsBySize.entries()].map(
+      ([size, specs]) =>
+        `        if (width == ${size}) { return [${specs.map((h) => `${h.px}, ${h.py}`).join(", ")}] as Array<Number>; }`,
+    ),
+    "        return null;",
+    "    }",
+    "",
+    "    function shadowOffsets(width as Number) as Array<Float>? {",
+    ...[...shadowsBySize.entries()].map(
+      ([size, specs]) =>
+        `        if (width == ${size}) { return [${specs.map((h) => `${h.dx.toFixed(3)}, ${h.dy.toFixed(3)}`).join(", ")}] as Array<Float>; }`,
+    ),
+    "        return null;",
     "    }",
     "}",
     "",

@@ -3,4 +3,9 @@
     <bitmap id="HandHour" filename="hand-placeholder.png" dithering="none" />
     <bitmap id="HandMinute" filename="hand-placeholder.png" dithering="none" />
     <bitmap id="HandSeconds" filename="hand-placeholder.png" dithering="none" />
+    <bitmap id="ShadowDay" filename="hand-placeholder.png" dithering="none" />
+    <bitmap id="ShadowWeek" filename="hand-placeholder.png" dithering="none" />
+    <bitmap id="ShadowHour" filename="hand-placeholder.png" dithering="none" />
+    <bitmap id="ShadowMinute" filename="hand-placeholder.png" dithering="none" />
+    <bitmap id="ShadowSeconds" filename="hand-placeholder.png" dithering="none" />
 </drawables>
