@@ -1,34 +1,38 @@
 #!/usr/bin/env node
 // Render the 5212 dial without hands from the offline web build (the macOS
-// screensaver page) and write the Garmin bitmaps for every target watch:
-//   resources-<device>/drawables/dial.png      dial at the screen size, date window included
-//   resources-<device>/drawables/date-NN.png   the date window crop for day NN (1-31)
-//   resources-<device>/drawables/dial.xml      resource entries for the above
-//   source/Generated.mc                        resource table for the date bitmaps
-// The date-crop position is not written anywhere: Face5212View computes it with
-// the same formula (dateCropOrigin below), so it stays right for every size.
-// Previews (hi-res render, 64-colour quantised versions) go to <preview-dir>/<device>/.
+// screensaver page) and write everything the Garmin project derives from the
+// device list in manifest.xml:
+//   resources-round-<W>x<H>/drawables/dial.png     dial at that screen size (one folder per size)
+//   resources-round-<W>x<H>/drawables/date-NN.png  the date window for day NN (1-31)
+//   resources-round-<W>x<H>/drawables/dial.xml     resource entries for the above
+//   resources-icon-<N>/drawables/                  launcher icon at each icon size the devices use
+//   monkey.jungle                                  per-device icon folder assignments
+//   source/Generated.mc                            resource table for the date bitmaps
+//   README.md                                      the "Supported watches" table (between markers)
+// Screen size, icon size, display type and names come from the Connect IQ SDK's
+// device files, so adding a watch is one line in manifest.xml plus a re-export.
+// The Connect IQ build picks resources-round-<W>x<H> for every device of that
+// screen family by itself (see bin/default.jungle in the SDK).
 //
-// Usage: node tools/export-assets.mjs <5212-web-dir> <garmin-project-dir> <preview-dir>
-// <5212-web-dir> (the repo root) must contain a built dist-screensaver/ and node_modules/.
-// ../export.sh runs the build and this script.
+// Usage: node tools/export-assets.mjs <repo-root> <garmin-dir> <preview-dir>
+// <repo-root> must contain a built dist-screensaver/ and node_modules/.
+// CIQ_DEVICES_DIR overrides the SDK device folder (default: the SDK Manager's macOS path).
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const [webDir, projectDir, previewDir] = process.argv.slice(2);
-if (!webDir || !projectDir || !previewDir) {
-  console.error("usage: export-assets.mjs <5212-web-dir> <garmin-project-dir> <preview-dir>");
+const [repoDir, garminDir, previewDir] = process.argv.slice(2);
+if (!repoDir || !garminDir || !previewDir) {
+  console.error("usage: export-assets.mjs <repo-root> <garmin-dir> <preview-dir>");
   process.exit(2);
 }
-const { chromium } = createRequire(path.join(webDir, "package.json"))("playwright");
+const { chromium } = createRequire(path.join(repoDir, "package.json"))("playwright");
 
-// Target watches: device id (as in manifest.xml) and screen size in pixels.
-const TARGETS = [
-  { device: "fenix6pro", size: 260, palette64: true },
-  { device: "fenix9pro47mm", size: 454, palette64: false },
-];
+const devicesDir =
+  process.env.CIQ_DEVICES_DIR ||
+  path.join(os.homedir(), "Library/Application Support/Garmin/ConnectIQ/Devices");
 
 // Geometry from src/components/WeeklyCalendarWatch.tsx (photo pixels).
 const IMG_W = 2911;
@@ -37,7 +41,51 @@ const CY = 1331;
 const R_DIAL_EDGE = 1030;
 const DATE_WINDOW_CLIP = { left: 2017, top: 1264, right: 2181, bottom: 1394 };
 
-// Same integer formula as Face5212View.dateCropOrigin(): floor((p - edge) * size / 2060).
+// ---------------------------------------------------------------------------
+// Devices: read manifest.xml, then each device's compiler.json from the SDK.
+
+const manifest = fs.readFileSync(path.join(garminDir, "manifest.xml"), "utf8");
+const deviceIds = [...manifest.matchAll(/<iq:product id="([^"]+)"/g)].map((m) => m[1]);
+if (deviceIds.length === 0) throw new Error("manifest.xml lists no <iq:product> entries");
+
+const devices = deviceIds.map((id) => {
+  const file = path.join(devicesDir, id, "compiler.json");
+  if (!fs.existsSync(file)) {
+    throw new Error(`device "${id}" is not in ${devicesDir}; install it with the SDK Manager`);
+  }
+  const d = JSON.parse(fs.readFileSync(file, "utf8"));
+  const { width, height } = d.resolution;
+  if (!d.deviceFamily.startsWith("round-") || width !== height) {
+    throw new Error(
+      `${id}: screen family ${d.deviceFamily} is not round; the dial needs a round screen`,
+    );
+  }
+  const memory = Object.fromEntries(d.appTypes.map((a) => [a.type, a.memoryLimit]));
+  if (!memory.watchFace) throw new Error(`${id} does not run watch faces`);
+  return {
+    id,
+    name: d.displayName.replace(/[®™]/g, ""),
+    family: d.deviceFamily,
+    size: width,
+    display: d.displayType,
+    icon: d.launcherIcon.width,
+    memory: memory.watchFace,
+  };
+});
+
+const sizes = [...new Set(devices.map((d) => d.size))].sort((a, b) => a - b);
+const iconSizes = [...new Set(devices.map((d) => d.icon))].sort((a, b) => a - b);
+const targets = sizes.map((size) => ({
+  size,
+  family: `round-${size}x${size}`,
+  // The 64-colour preview only matters for MIP screens.
+  palette64: devices.some((d) => d.size === size && d.display === "mip"),
+  drawablesDir: path.join(garminDir, `resources-round-${size}x${size}`, "drawables"),
+  previewDir: path.join(previewDir, `round-${size}x${size}`),
+  crop: dateCrop(size),
+}));
+
+// Same integer formula as Face5212View.onLayout(): floor((p - edge) * size / 2060).
 function dateCrop(size) {
   const span = 2 * R_DIAL_EDGE;
   const x = Math.floor(((DATE_WINDOW_CLIP.left - (CX - R_DIAL_EDGE)) * size) / span);
@@ -47,12 +95,15 @@ function dateCrop(size) {
   return { x, y, w: right - x, h: bottom - y };
 }
 
+// ---------------------------------------------------------------------------
+// Rendering.
+
 const HIDE_HANDS_CSS = `
   [data-day-indicator-hand], [data-week-indicator-hand], [data-hour-hand],
   [data-minute-hand], [data-seconds-hand] { display: none !important; }
 `;
 
-const pageUrl = pathToFileURL(path.join(webDir, "dist-screensaver", "index.html")).href;
+const pageUrl = pathToFileURL(path.join(repoDir, "dist-screensaver", "index.html")).href;
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 // Render the dial for one calendar day; returns a hi-res PNG of the dial disc.
@@ -124,7 +175,7 @@ async function processDial(png, size, crop, wantPreviews) {
       const result = { full: out.toDataURL("image/png"), date: dateCanvas.toDataURL("image/png") };
       if (!wantPreviews) return result;
 
-      // The fenix 6 palette is the full 4x4x4 cube (00/55/AA/FF per channel),
+      // The MIP palette is the full 4x4x4 cube (00/55/AA/FF per channel),
       // so the nearest palette colour is the per-channel nearest level.
       const level = (v) => Math.min(3, Math.max(0, Math.round(v / 85))) * 85;
       const quantise = (dither) => {
@@ -182,10 +233,8 @@ const DITHERING = process.env.DIAL_DITHERING || "none";
 const dateIds = Array.from({ length: 31 }, (_, i) => `Date${i + 1}`);
 const dateFile = (i) => `date-${String(i + 1).padStart(2, "0")}.png`;
 
-for (const t of TARGETS) {
-  t.drawablesDir = path.join(projectDir, `resources-${t.device}`, "drawables");
-  t.previewDir = path.join(previewDir, t.device);
-  t.crop = dateCrop(t.size);
+for (const t of targets) {
+  fs.rmSync(path.dirname(t.drawablesDir), { recursive: true, force: true });
   fs.mkdirSync(t.drawablesDir, { recursive: true });
   fs.mkdirSync(t.previewDir, { recursive: true });
 }
@@ -194,7 +243,7 @@ for (let day = 1; day <= 31; day++) {
   const png = await renderDial(day);
   const first = day === 1;
   if (first) fs.writeFileSync(path.join(previewDir, "dial-hires.png"), png);
-  for (const t of TARGETS) {
+  for (const t of targets) {
     const res = await processDial(png, t.size, t.crop, first);
     if (first) {
       writeDataUrl(path.join(t.drawablesDir, "dial.png"), res.full);
@@ -211,11 +260,17 @@ for (let day = 1; day <= 31; day++) {
 process.stdout.write("\n");
 await browser.close();
 
-for (const t of TARGETS) {
+// ---------------------------------------------------------------------------
+// Generated files.
+
+const generatedHeader = (comment) =>
+  `${comment} Generated by tools/export-assets.mjs. Do not edit.`;
+
+for (const t of targets) {
   fs.writeFileSync(
     path.join(t.drawablesDir, "dial.xml"),
     [
-      "<!-- Generated by tools/export-assets.mjs. Do not edit. -->",
+      `<!-- ${generatedHeader("")}-->`.replace("<!--  ", "<!-- "),
       "<drawables>",
       `    <bitmap id="Dial" filename="dial.png" dithering="${DITHERING}" />`,
       ...dateIds.map(
@@ -227,10 +282,60 @@ for (const t of TARGETS) {
   );
 }
 
+// Launcher icon per icon size: the base icon scaled to the device's icon box.
+const baseIcon = fs.readFileSync(
+  path.join(garminDir, "resources", "drawables", "launcher_icon.svg"),
+  "utf8",
+);
+const written = new Set(targets.map((t) => path.basename(path.dirname(t.drawablesDir))));
+for (const n of iconSizes) {
+  const dirName = `resources-icon-${n}`;
+  const dir = path.join(garminDir, dirName, "drawables");
+  fs.rmSync(path.join(garminDir, dirName), { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "launcher_icon.svg"),
+    baseIcon.replace(/width="\d+" height="\d+"/, `width="${n}" height="${n}"`),
+  );
+  fs.writeFileSync(
+    path.join(dir, "launcher.xml"),
+    [
+      `<!-- ${generatedHeader("")}-->`.replace("<!--  ", "<!-- "),
+      "<drawables>",
+      '    <bitmap id="LauncherIcon" filename="launcher_icon.svg" dithering="none" />',
+      "</drawables>",
+      "",
+    ].join("\n"),
+  );
+  written.add(dirName);
+}
+// Drop folders from screen sizes or icon sizes that no device uses any more.
+for (const entry of fs.readdirSync(garminDir)) {
+  if (/^resources-(round-\d+x\d+|icon-\d+)$/.test(entry) && !written.has(entry)) {
+    fs.rmSync(path.join(garminDir, entry), { recursive: true, force: true });
+  }
+}
+
 fs.writeFileSync(
-  path.join(projectDir, "source", "Generated.mc"),
+  path.join(garminDir, "monkey.jungle"),
   [
-    "// Generated by tools/export-assets.mjs. Do not edit.",
+    generatedHeader("#"),
+    "# The dial bitmaps live in resources-round-<W>x<H>/, which the SDK's default.jungle",
+    "# already assigns to every device of that screen family. Only the launcher icon",
+    "# size differs between devices, so each device gets its icon folder here.",
+    "project.manifest = manifest.xml",
+    "",
+    ...devices.map(
+      (d) => `${d.id}.resourcePath = $(${d.id}.resourcePath);resources-icon-${d.icon}`,
+    ),
+    "",
+  ].join("\n"),
+);
+
+fs.writeFileSync(
+  path.join(garminDir, "source", "Generated.mc"),
+  [
+    generatedHeader("//"),
     "import Toybox.Lang;",
     "",
     "module Generated {",
@@ -246,9 +351,38 @@ fs.writeFileSync(
   ].join("\n"),
 );
 
+// Supported-watches table in garmin/README.md, between the markers.
+const readmeFile = path.join(garminDir, "README.md");
+const readme = fs.readFileSync(readmeFile, "utf8");
+const start = "<!-- devices:start -->";
+const end = "<!-- devices:end -->";
+if (!readme.includes(start) || !readme.includes(end)) {
+  throw new Error(`README.md needs the markers ${start} and ${end}`);
+}
+const tableRows = devices
+  .slice()
+  .sort((a, b) => a.size - b.size || a.id.localeCompare(b.id))
+  .map((d) => `| \`${d.id}\` | ${d.name} | ${d.size} × ${d.size} ${d.display.toUpperCase()} |`);
+const table = [
+  start,
+  `${devices.length} watches on ${sizes.length} screen sizes. The release file for a watch is`,
+  "`5212-Weekly-Calendar-<version>-garmin-<device id>.prg`.",
+  "",
+  "| Device id | Watch | Screen |",
+  "| --- | --- | --- |",
+  ...tableRows,
+  end,
+].join("\n");
+fs.writeFileSync(
+  readmeFile,
+  readme.slice(0, readme.indexOf(start)) + table + readme.slice(readme.indexOf(end) + end.length),
+);
+
 console.log(
   JSON.stringify({
-    targets: TARGETS.map((t) => ({ device: t.device, size: t.size, dateCrop: t.crop })),
+    devices: devices.length,
+    sizes: targets.map((t) => ({ size: t.size, dateCrop: t.crop, palette64: t.palette64 })),
+    iconSizes,
     dithering: DITHERING,
   }),
 );

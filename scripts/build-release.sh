@@ -2,7 +2,8 @@
 # Build every release asset into dist-release/:
 #   5212-Weekly-Calendar-<version>-macos.saver.zip        universal macOS screensaver bundle
 #   5212-Weekly-Calendar-<version>-garmin-<device>.prg    Connect IQ watch face, one per device in garmin/manifest.xml
-#   <asset>.sha256                                        SHA-256 checksum beside each asset
+#   5212-Weekly-Calendar-<version>-macos.saver.zip.sha256 SHA-256 of the screensaver zip
+#   5212-Weekly-Calendar-<version>-garmin.sha256          SHA-256 list of every watch-face file
 #
 # Usage: scripts/build-release.sh v1.1.0        (or: npm run build:release -- v1.1.0)
 # Needs: Node.js, Xcode Command Line Tools, the Connect IQ SDK, Java 21, and a
@@ -33,9 +34,8 @@ done
 
 echo "== checksums"
 cd "$OUT_DIR"
-for asset in *; do
-  shasum -a 256 "$asset" > "$asset.sha256"
-done
+shasum -a 256 "$PREFIX-macos.saver.zip" > "$PREFIX-macos.saver.zip.sha256"
+shasum -a 256 "$PREFIX"-garmin-*.prg > "$PREFIX-garmin.sha256"
 
 echo "== release assets in $OUT_DIR"
 ls -l "$OUT_DIR"

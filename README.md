@@ -36,7 +36,7 @@ The dial is drawn programmatically (React + SVG) on top of a 2911 × 2683 orthog
 | ----------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Web simulator     | The calibrated dial over the reference photo, with live time, perpetual calendar, a 3D model, and alignment controls | [Live demo](https://patek-5212.grok.me/) · [Web simulator](#web-simulator) |
 | macOS screensaver | An offline, button-free build of the dial in a native `.saver` bundle                                                | [docs/SCREENSAVER.md](docs/SCREENSAVER.md)                                 |
-| Garmin watch face | The dial and hands on a fēnix 6 Pro or fēnix 9 Pro                                                                   | [garmin/README.md](garmin/README.md)                                       |
+| Garmin watch face | The dial and hands on 66 Garmin watches: fēnix 5 Plus and newer, Forerunner, Venu, vívoactive, epix, Enduro, MARQ    | [garmin/README.md](garmin/README.md)                                       |
 
 What is reproduced:
 
@@ -52,11 +52,10 @@ What is reproduced:
 
 Prebuilt files for every version are on the [Releases page](https://github.com/tinybit/5212/releases/latest). Each file has a `.sha256` checksum beside it. The web simulator needs no install: open the [live demo](https://patek-5212.grok.me/).
 
-| File                                                      | What it is                                             | For                                                              |
-| --------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
-| `5212-Weekly-Calendar-<version>-macos.saver.zip`          | macOS screensaver, universal (Apple Silicon and Intel) | macOS 13 or newer                                                |
-| `5212-Weekly-Calendar-<version>-garmin-fenix6pro.prg`     | Garmin watch face                                      | fēnix 6 Pro, 6 Pro Solar, 6 Pro Dual Power, 6 Sapphire, quatix 6 |
-| `5212-Weekly-Calendar-<version>-garmin-fenix9pro47mm.prg` | Garmin watch face                                      | fēnix 9 Pro 47 mm                                                |
+| File                                                    | What it is                                             | For                                                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `5212-Weekly-Calendar-<version>-macos.saver.zip`        | macOS screensaver, universal (Apple Silicon and Intel) | macOS 13 or newer                                                                                             |
+| `5212-Weekly-Calendar-<version>-garmin-<device id>.prg` | Garmin watch face, one file per watch model            | 66 watches; find your device id in [garmin/README.md → Supported watches](garmin/README.md#supported-watches) |
 
 ### macOS screensaver
 
@@ -70,7 +69,7 @@ On macOS 26, System Settings can keep running the previous build after an upgrad
 
 ### Garmin watch face
 
-The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Take the file for your watch from the table above; a file built for another model does not install.
+The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Take the file whose device id matches your watch ([list](garmin/README.md#supported-watches)); a file built for another model does not install.
 
 1. Quit Garmin Express completely, including its menu bar or tray icon. While it runs, the watch's storage is not reachable.
 2. Connect the watch with its USB cable and open its storage:
@@ -82,7 +81,7 @@ The watch face is installed by copying its `.prg` file onto the watch over USB. 
 
 To remove the watch face later, use Garmin Express.
 
-Tested on a fēnix 6 Pro Solar from macOS. The fēnix 9 Pro 47 mm build has run only in Garmin's simulator so far.
+Tested on a fēnix 6 Pro Solar from macOS. Every other model has run only in Garmin's simulator so far.
 
 ### Platform support
 
@@ -172,10 +171,7 @@ Full guide, including verification and troubleshooting: [docs/SCREENSAVER.md](do
 
 A Connect IQ watch face built from this dial. Prebuilt files and the steps to put one on a watch are under [Install](#install). The dial and one date-window bitmap per day are rendered from the web build; the five hands are drawn on the watch from the measured shapes, with the same ISO week, weekday, and date logic.
 
-| Device id       | Watch                                             | Screen                    |
-| --------------- | ------------------------------------------------- | ------------------------- |
-| `fenix6pro`     | fēnix 6 Pro / 6 Pro Solar / 6 Sapphire / quatix 6 | 260 × 260 MIP, 64 colours |
-| `fenix9pro47mm` | fēnix 9 Pro 47 mm                                 | 454 × 454 AMOLED          |
+Supported watches: 66 models on 7 screen sizes, listed in [garmin/README.md](garmin/README.md#supported-watches). To add one, add its device id to `garmin/manifest.xml` and run `./garmin/export.sh`.
 
 ```bash
 ./garmin/run.sh fenix9pro47mm          # build and load into the Connect IQ simulator
