@@ -56,10 +56,25 @@ class Face5212View extends WatchUi.WatchFace {
             dc.setAntiAlias(true);
         }
 
-        if (!_awake && _burnInProtection) {
+        // Low power when either signal says so: the sleep callbacks, or the display
+        // mode the system reports (AMOLED devices, API 5+). Trusting one alone can
+        // draw the full dial into an always-on frame, which trips the burn-in
+        // protector: the watch then blanks the screen and greys out "Always On".
+        var lowPower = !_awake;
+        if (System has :getDisplayMode) {
+            var mode = System.getDisplayMode();
+            if (mode == System.DISPLAY_MODE_OFF) {
+                return;
+            }
+            lowPower = lowPower || mode == System.DISPLAY_MODE_LOW_POWER;
+        }
+
+        if (lowPower && _burnInProtection) {
+            // Always-on view: black screen, hour and minute hands only. Well under the
+            // 10% luminance budget; shifted a pixel each minute so no pixel stays lit.
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
             dc.clear();
-            Hands.drawSleep(dc, hourAngle, minuteAngle);
+            Hands.drawSleep(dc, hourAngle, minuteAngle, (min % 3) - 1, ((min / 3) % 3) - 1);
             return;
         }
 
@@ -81,11 +96,11 @@ class Face5212View extends WatchUi.WatchFace {
         Hands.drawWeek(dc, Calendar.weekHandAngle(year, month, day, dayOfWeek));
         Hands.drawHour(dc, hourAngle);
         Hands.drawMinute(dc, minuteAngle);
-        if (_awake) {
-            Hands.drawSeconds(dc, sec * 6.0);
-        } else {
+        if (lowPower) {
             // Low-power mode redraws once a minute, so the seconds hand would be wrong.
             Hands.drawHub(dc);
+        } else {
+            Hands.drawSeconds(dc, sec * 6.0);
         }
     }
 

@@ -140,8 +140,21 @@ module Hands {
     }
 
     // Always-on view for screens with burn-in protection: hour and minute
-    // hands as single dim shapes on black, so few pixels stay lit.
-    function drawSleep(dc as Dc, hourAngleDeg as Float, minuteAngleDeg as Float) as Void {
+    // hands as single dim shapes on black, so few pixels stay lit. shiftX/shiftY
+    // move the whole drawing by a pixel or two so the same pixels are not lit
+    // minute after minute.
+    function drawSleep(dc as Dc, hourAngleDeg as Float, minuteAngleDeg as Float,
+            shiftX as Number, shiftY as Number) as Void {
+        var cx0 = cx;
+        var cy0 = cy;
+        cx += shiftX;
+        cy += shiftY;
+        drawSleepHands(dc, hourAngleDeg, minuteAngleDeg);
+        cx = cx0;
+        cy = cy0;
+    }
+
+    function drawSleepHands(dc as Dc, hourAngleDeg as Float, minuteAngleDeg as Float) as Void {
         var a = Math.toRadians(hourAngleDeg);
         var sn = Math.sin(a);
         var cs = Math.cos(a);
