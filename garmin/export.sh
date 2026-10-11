@@ -2,7 +2,7 @@
 # Re-render the dial and date bitmaps from the web dial in this repo.
 # It builds the offline screensaver page (dist-screensaver/, git-ignored) and
 # screenshots it with Playwright through the installed Google Chrome.
-# Set DIAL_DITHERING=floyd_steinberg to keep a dithered cream tint on 64-colour screens.
+# MIP (64-colour) screens get the dial reduced to the palette's four greys; AMOLED screens get full colour.
 set -euo pipefail
 cd "$(dirname "$0")"
 REPO="$(cd .. && pwd)"

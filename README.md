@@ -52,10 +52,10 @@ What is reproduced:
 
 Prebuilt files for every version are on the [Releases page](https://github.com/tinybit/5212/releases/latest). Each file has a `.sha256` checksum beside it. The web simulator needs no install: open the [live demo](https://patek-5212.grok.me/).
 
-| File                                                    | What it is                                             | For                                                                                                           |
-| ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `5212-Weekly-Calendar-<version>-macos.saver.zip`        | macOS screensaver, universal (Apple Silicon and Intel) | macOS 13 or newer                                                                                             |
-| `5212-Weekly-Calendar-<version>-garmin-<device id>.prg` | Garmin watch face, one file per watch model            | 66 watches; find your device id in [garmin/README.md → Supported watches](garmin/README.md#supported-watches) |
+| File                                             | What it is                                                                    | For                                                     |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `5212-Weekly-Calendar-<version>-macos.saver.zip` | macOS screensaver, universal (Apple Silicon and Intel)                        | macOS 13 or newer                                       |
+| `5212-Weekly-Calendar-<version>-garmin.zip`      | Garmin watch face: one `.prg` file per watch model, plus a `WATCHES.md` table | 66 watches ([list](garmin/README.md#supported-watches)) |
 
 ### macOS screensaver
 
@@ -69,7 +69,7 @@ On macOS 26, System Settings can keep running the previous build after an upgrad
 
 ### Garmin watch face
 
-The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Take the file whose device id matches your watch ([list](garmin/README.md#supported-watches)); a file built for another model does not install.
+The watch face is installed by copying its `.prg` file onto the watch over USB. No Connect IQ store account is needed. Download and unzip the `-garmin.zip`; it holds one `.prg` per watch model and a `WATCHES.md` table. Take the file whose device id matches your watch ([list](garmin/README.md#supported-watches)); a file built for another model does not install.
 
 1. Quit Garmin Express completely, including its menu bar or tray icon. While it runs, the watch's storage is not reachable.
 2. Connect the watch with its USB cable and open its storage:
@@ -231,7 +231,7 @@ npm run build:release -- v1.2.0
 gh release create v1.2.0 dist-release/* --title "5212 Weekly Calendar v1.2.0" --notes-file notes.md
 ```
 
-`scripts/build-release.sh` builds the screensaver bundle and one watch-face file per device in `garmin/manifest.xml`, zips the bundle, and writes a `.sha256` beside each asset in `dist-release/` (git-ignored). It needs the toolchains from [docs/SCREENSAVER.md](docs/SCREENSAVER.md) and [garmin/README.md](garmin/README.md), including the Connect IQ developer key.
+`scripts/build-release.sh` builds the screensaver bundle and one watch-face file per device in `garmin/manifest.xml`, zips each set (the `.saver` bundle; the watch-face files with a `WATCHES.md` table and `SHA256SUMS`), and writes a `.sha256` beside both zips in `dist-release/` (git-ignored). It needs the toolchains from [docs/SCREENSAVER.md](docs/SCREENSAVER.md) and [garmin/README.md](garmin/README.md), including the Connect IQ developer key.
 
 ## Documentation
 

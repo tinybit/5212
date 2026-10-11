@@ -60,6 +60,12 @@ const devices = deviceIds.map((id) => {
       `${id}: screen family ${d.deviceFamily} is not round; the dial needs a round screen`,
     );
   }
+  if (d.bitsPerPixel < 8) {
+    // The Forerunner 55 class: 8 colours, no greys. The dial is unreadable there.
+    throw new Error(
+      `${id}: ${d.bitsPerPixel}-bit screen with ${d.palette?.colors?.length ?? "few"} colours; the dial needs at least 64`,
+    );
+  }
   const memory = Object.fromEntries(d.appTypes.map((a) => [a.type, a.memoryLimit]));
   if (!memory.watchFace) throw new Error(`${id} does not run watch faces`);
   return {
@@ -78,8 +84,9 @@ const iconSizes = [...new Set(devices.map((d) => d.icon))].sort((a, b) => a - b)
 const targets = sizes.map((size) => ({
   size,
   family: `round-${size}x${size}`,
-  // The 64-colour preview only matters for MIP screens.
-  palette64: devices.some((d) => d.size === size && d.display === "mip"),
+  // MIP screens get a 4-grey dial (00/55/AA/FF). The dial has no colour of its own,
+  // and pre-quantising keeps blended edge pixels from landing on tinted palette entries.
+  grey4: devices.some((d) => d.size === size && d.display === "mip"),
   drawablesDir: path.join(garminDir, `resources-round-${size}x${size}`, "drawables"),
   previewDir: path.join(previewDir, `round-${size}x${size}`),
   crop: dateCrop(size),
@@ -136,11 +143,11 @@ async function renderDial(day) {
   return png;
 }
 
-// Canvas work page: downscale, crop, and (for previews) quantise to the 64-colour palette.
+// Canvas work page: downscale, optionally reduce to 4 greys, and crop the date window.
 const work = await browser.newPage();
-async function processDial(png, size, crop, wantPreviews) {
+async function processDial(png, size, crop, grey4) {
   return work.evaluate(
-    async ({ dataUrl, size, crop, wantPreviews }) => {
+    async ({ dataUrl, size, crop, grey4 }) => {
       const img = new Image();
       img.src = dataUrl;
       await img.decode();
@@ -165,6 +172,19 @@ async function processDial(png, size, crop, wantPreviews) {
       octx.imageSmoothingQuality = "high";
       octx.drawImage(src, 0, 0, size, size);
 
+      if (grey4) {
+        // Luminance, then the nearest of the MIP palette's four greys.
+        const im = octx.getImageData(0, 0, size, size);
+        const d = im.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const lum = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          const q = Math.min(3, Math.max(0, Math.round(lum / 85))) * 85;
+          d[i] = d[i + 1] = d[i + 2] = q;
+          d[i + 3] = 255;
+        }
+        octx.putImageData(im, 0, 0);
+      }
+
       const dateCanvas = document.createElement("canvas");
       dateCanvas.width = crop.w;
       dateCanvas.height = crop.h;
@@ -172,56 +192,13 @@ async function processDial(png, size, crop, wantPreviews) {
         .getContext("2d")
         .drawImage(out, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
 
-      const result = { full: out.toDataURL("image/png"), date: dateCanvas.toDataURL("image/png") };
-      if (!wantPreviews) return result;
-
-      // The MIP palette is the full 4x4x4 cube (00/55/AA/FF per channel),
-      // so the nearest palette colour is the per-channel nearest level.
-      const level = (v) => Math.min(3, Math.max(0, Math.round(v / 85))) * 85;
-      const quantise = (dither) => {
-        const c = document.createElement("canvas");
-        c.width = size;
-        c.height = size;
-        const ctx = c.getContext("2d");
-        ctx.drawImage(out, 0, 0);
-        const im = ctx.getImageData(0, 0, size, size);
-        const d = im.data;
-        const buf = Float32Array.from(d);
-        for (let y = 0; y < size; y++) {
-          for (let x = 0; x < size; x++) {
-            const i = (y * size + x) * 4;
-            for (let ch = 0; ch < 3; ch++) {
-              const old = buf[i + ch];
-              const q = level(old);
-              d[i + ch] = q;
-              if (!dither) continue;
-              const err = old - q;
-              const spread = (dx, dy, w) => {
-                const nx = x + dx;
-                const ny = y + dy;
-                if (nx < 0 || nx >= size || ny >= size) return;
-                buf[(ny * size + nx) * 4 + ch] += err * w;
-              };
-              spread(1, 0, 7 / 16);
-              spread(-1, 1, 3 / 16);
-              spread(0, 1, 5 / 16);
-              spread(1, 1, 1 / 16);
-            }
-            d[i + 3] = 255;
-          }
-        }
-        ctx.putImageData(im, 0, 0);
-        return c.toDataURL("image/png");
-      };
-      result.plain = quantise(false);
-      result.dithered = quantise(true);
-      return result;
+      return { full: out.toDataURL("image/png"), date: dateCanvas.toDataURL("image/png") };
     },
     {
       dataUrl: `data:image/png;base64,${png.toString("base64")}`,
       size,
       crop,
-      wantPreviews,
+      grey4,
     },
   );
 }
@@ -229,7 +206,8 @@ async function processDial(png, size, crop, wantPreviews) {
 const writeDataUrl = (file, dataUrl) =>
   fs.writeFileSync(file, Buffer.from(dataUrl.split(",")[1], "base64"));
 
-const DITHERING = process.env.DIAL_DITHERING || "none";
+// MIP dials are already reduced to the palette's greys, so the resource compiler must not dither them.
+const DITHERING = "none";
 const dateIds = Array.from({ length: 31 }, (_, i) => `Date${i + 1}`);
 const dateFile = (i) => `date-${String(i + 1).padStart(2, "0")}.png`;
 
@@ -244,14 +222,10 @@ for (let day = 1; day <= 31; day++) {
   const first = day === 1;
   if (first) fs.writeFileSync(path.join(previewDir, "dial-hires.png"), png);
   for (const t of targets) {
-    const res = await processDial(png, t.size, t.crop, first);
+    const res = await processDial(png, t.size, t.crop, t.grey4);
     if (first) {
       writeDataUrl(path.join(t.drawablesDir, "dial.png"), res.full);
       writeDataUrl(path.join(t.previewDir, "dial.png"), res.full);
-      if (t.palette64) {
-        writeDataUrl(path.join(t.previewDir, "dial-64colors.png"), res.plain);
-        writeDataUrl(path.join(t.previewDir, "dial-64colors-dithered.png"), res.dithered);
-      }
     }
     writeDataUrl(path.join(t.drawablesDir, dateFile(day - 1)), res.date);
   }
@@ -365,8 +339,8 @@ const tableRows = devices
   .map((d) => `| \`${d.id}\` | ${d.name} | ${d.size} × ${d.size} ${d.display.toUpperCase()} |`);
 const table = [
   start,
-  `${devices.length} watches on ${sizes.length} screen sizes. The release file for a watch is`,
-  "`5212-Weekly-Calendar-<version>-garmin-<device id>.prg`.",
+  `${devices.length} watches on ${sizes.length} screen sizes. The release zip \`5212-Weekly-Calendar-<version>-garmin.zip\` holds one file per watch,`,
+  "named `5212-Weekly-Calendar-<version>-garmin-<device id>.prg`.",
   "",
   "| Device id | Watch | Screen |",
   "| --- | --- | --- |",
@@ -381,7 +355,7 @@ fs.writeFileSync(
 console.log(
   JSON.stringify({
     devices: devices.length,
-    sizes: targets.map((t) => ({ size: t.size, dateCrop: t.crop, palette64: t.palette64 })),
+    sizes: targets.map((t) => ({ size: t.size, dateCrop: t.crop, grey4: t.grey4 })),
     iconSizes,
     dithering: DITHERING,
   }),
