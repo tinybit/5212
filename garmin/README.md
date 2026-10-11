@@ -15,6 +15,7 @@ Behaviour that differs from the web dial, and between watches:
 
 - The seconds hand shows only while the watch is awake. In low-power mode the watch redraws once a minute, so the seconds hand is hidden.
 - On modern AMOLED watches (fēnix 8/9, epix, Venu, vívoactive, Forerunner AMOLED) the seconds hand beats eight times a second like the real calibre, and the hour and minute hands creep forward with every beat like geared hands, driven by a timer that runs only while the watch is awake. Older and MIP watches keep a plain once-a-second hand; the timer is never started there.
+- On the fēnix 9 Pro the day and week pointers glide to a new position over 400 ms with the web dial's ease-out curve when the change happens while the watch is awake (`source/Glide.mc`). Asleep, in the always-on view, they jump: that view redraws once a minute and cannot animate. After waking they are drawn where they belong, without a catch-up sweep.
 - On screens with burn-in protection (AMOLED), the always-on view is the dial inverted: black background, print and markers in grey at 55% white, dim pointers with muted red heads, brighter hour and minute hands, no seconds. Garmin blanks an always-on face above 10% of the screen's luminance; this view measures about 9% in the simulator's burn-in test.
 
 ## Supported watches

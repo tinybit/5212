@@ -46,6 +46,16 @@ class Face5212View extends WatchUi.WatchFace {
     // value at a clock-second boundary. The watch's own once-a-second redraw lands
     // on that boundary, so this converges within a second and then stays put.
     private var _phaseMs as Long = 0x7FFFFFFFFFFFFFFFl;
+    // Day and week pointers glide to a new position when the change happens while the
+    // watch is awake, where the image hands run (the fēnix 9 Pro): 400 ms with the web
+    // dial's ease-out curve, redrawn 20 times a second by _glideTimer (see Glide.mc).
+    // Asleep they jump, and after waking they are simply drawn where they belong.
+    private const GLIDE_TICK_MS = 50;
+    private var _dayGlide as Glide = new Glide();
+    private var _weekGlide as Glide = new Glide();
+    private var _dayShown as Float? = null;
+    private var _weekShown as Float? = null;
+    private var _glideTimer as Timer.Timer?;
 
     function initialize() {
         WatchFace.initialize();
@@ -107,8 +117,10 @@ class Face5212View extends WatchUi.WatchFace {
         var secF = beatSupported() ? preciseSeconds(sec, now) : sec * 1.0;
         var hourAngle = ((hour % 12) + min / 60.0 + secF / 3600.0) * 30.0;
         var minuteAngle = (min + secF / 60.0) * 6.0;
-        var dayAngle = Calendar.dayHandAngle(dayOfWeek);
-        var weekAngle = Calendar.weekHandAngle(year, month, day, dayOfWeek);
+        var dayTarget = Calendar.dayHandAngle(dayOfWeek);
+        var weekTarget = Calendar.weekHandAngle(year, month, day, dayOfWeek);
+        var dayAngle = dayTarget;
+        var weekAngle = weekTarget;
 
         if (dc has :setAntiAlias) {
             dc.setAntiAlias(true);
@@ -138,6 +150,7 @@ class Face5212View extends WatchUi.WatchFace {
                 _dateAod = WatchUi.loadResource(Generated.dateAodBitmapId(day)) as BitmapResource;
                 _dateAodDay = day;
             }
+            resetGlides();
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
             dc.clear();
             dc.drawBitmap(0, 0, _dialAod as BitmapResource);
@@ -154,6 +167,17 @@ class Face5212View extends WatchUi.WatchFace {
 
         dc.drawBitmap(0, 0, _dial as BitmapResource);
         dc.drawBitmap(_dateX, _dateY, _date as BitmapResource);
+
+        if (!lowPower && Hands.smooth) {
+            var nowMs = System.getTimer();
+            dayAngle = glided(_dayGlide, _dayShown, dayTarget, nowMs);
+            weekAngle = glided(_weekGlide, _weekShown, weekTarget, nowMs);
+            _dayShown = dayTarget;
+            _weekShown = weekTarget;
+            updateGlideTimer();
+        } else {
+            resetGlides();
+        }
 
         // Stacking order matches the web app: day, week, hour, minute, seconds.
         Hands.drawDay(dc, dayAngle);
@@ -194,6 +218,46 @@ class Face5212View extends WatchUi.WatchFace {
         WatchUi.requestUpdate();
     }
 
+    // The angle to draw for a pointer whose target is `target`: when the target moved
+    // since the last awake frame (`shown`), a glide starts from the angle on screen.
+    private function glided(glide as Glide, shown as Float?, target as Float, nowMs as Number) as Float {
+        if (shown != null && (shown as Float) != target) {
+            glide.start(glide.angle(shown as Float, nowMs), target, nowMs);
+        }
+        return glide.angle(target, nowMs);
+    }
+
+    function onGlideTick() as Void {
+        WatchUi.requestUpdate();
+    }
+
+    // Runs the 20 Hz timer only while a glide is in progress, and only awake in high
+    // power, like the beat timer.
+    private function updateGlideTimer() as Void {
+        var active = _dayGlide.isActive() || _weekGlide.isActive();
+        if (active && _glideTimer == null && _awake && (System has :getDisplayMode)
+                && System.getDisplayMode() == System.DISPLAY_MODE_HIGH_POWER) {
+            _glideTimer = new Timer.Timer();
+            (_glideTimer as Timer.Timer).start(method(:onGlideTick), GLIDE_TICK_MS, true);
+        } else if (!active && _glideTimer != null) {
+            (_glideTimer as Timer.Timer).stop();
+            _glideTimer = null;
+        }
+    }
+
+    // Forget the pointer positions: the next awake frame draws them where they belong,
+    // without a glide. Used around sleep and when the face is hidden.
+    private function resetGlides() as Void {
+        _dayGlide.stop();
+        _weekGlide.stop();
+        _dayShown = null;
+        _weekShown = null;
+        if (_glideTimer != null) {
+            (_glideTimer as Timer.Timer).stop();
+            _glideTimer = null;
+        }
+    }
+
     private function startBeat() as Void {
         if (_beat != null || !_awake || !beatSupported()) {
             return;
@@ -218,10 +282,12 @@ class Face5212View extends WatchUi.WatchFace {
 
     function onHide() as Void {
         stopBeat();
+        resetGlides();
     }
 
     function onExitSleep() as Void {
         _awake = true;
+        resetGlides();
         startBeat();
         WatchUi.requestUpdate();
     }
@@ -229,6 +295,7 @@ class Face5212View extends WatchUi.WatchFace {
     function onEnterSleep() as Void {
         _awake = false;
         stopBeat();
+        resetGlides();
         WatchUi.requestUpdate();
     }
 
