@@ -2,6 +2,8 @@
 
 A pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Weekly Calendar Ref. 5212A-001**. One measured dial drives a web simulator, a macOS screensaver, and a Garmin watch face.
 
+**Live demo:** [patek-5212.grok.me](https://patek-5212.grok.me/) — the web simulator, running on your local time.
+
 ## Contents
 
 - [Overview](#overview)
@@ -25,11 +27,11 @@ A pixel-calibrated digital reconstruction of the **Patek Philippe Calatrava Week
 
 The dial is drawn programmatically (React + SVG) on top of a 2911 × 2683 orthographic photograph of the real watch. Every radius, sector line, glyph center, and hand silhouette was measured against that photograph and locked in [docs/PROCESS.md](docs/PROCESS.md). The same geometry feeds three outputs:
 
-| Output            | What it is                                                                                                           | Guide                                      |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Web simulator     | The calibrated dial over the reference photo, with live time, perpetual calendar, a 3D model, and alignment controls | [Web simulator](#web-simulator)            |
-| macOS screensaver | An offline, button-free build of the dial in a native `.saver` bundle                                                | [docs/SCREENSAVER.md](docs/SCREENSAVER.md) |
-| Garmin watch face | The dial and hands on a fēnix 6 Pro or fēnix 9 Pro                                                                   | [garmin/README.md](garmin/README.md)       |
+| Output            | What it is                                                                                                           | Guide                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Web simulator     | The calibrated dial over the reference photo, with live time, perpetual calendar, a 3D model, and alignment controls | [Live demo](https://patek-5212.grok.me/) · [Web simulator](#web-simulator) |
+| macOS screensaver | An offline, button-free build of the dial in a native `.saver` bundle                                                | [docs/SCREENSAVER.md](docs/SCREENSAVER.md)                                 |
+| Garmin watch face | The dial and hands on a fēnix 6 Pro or fēnix 9 Pro                                                                   | [garmin/README.md](garmin/README.md)                                       |
 
 What is reproduced:
 
